@@ -1,0 +1,6 @@
+{
+  "name": "OmniDownloader",
+  "description": "Universal video and audio downloader supporting format conversion and compression.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

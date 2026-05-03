@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="omnidownloader">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/omnidownloader.zip!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
