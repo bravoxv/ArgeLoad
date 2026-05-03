@@ -36,7 +36,8 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<VideoInfo | null>(null);
-  const [convertToMp3, setConvertToMp3] = useState(false);
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
 
   useEffect(() => {
     let interval: any;
@@ -57,6 +58,26 @@ export default function App() {
     }
     return () => clearInterval(interval);
   }, [loading, info]);
+
+  useEffect(() => {
+    const checkClipboard = async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text && (text.startsWith("http://") || text.startsWith("https://")) && text !== url) {
+          setUrl(text);
+        }
+      } catch (err) { }
+    };
+    window.addEventListener("focus", checkClipboard);
+    return () => window.removeEventListener("focus", checkClipboard);
+  }, [url]);
+
+  useEffect(() => {
+    // Autostart analysis when a valid URL is set and we're not already doing it
+    if (url && (url.startsWith("http://") || url.startsWith("https://")) && !info && !loading && !error) {
+      document.getElementById("analyze-btn")?.click();
+    }
+  }, [url, info, loading, error]);
 
   const formatBytes = (bytes: string | number | undefined) => {
     let b = typeof bytes === 'string' ? parseInt(bytes, 10) : Number(bytes);
@@ -99,9 +120,14 @@ export default function App() {
     }
   };
 
-  const handleDownload = (format: Format) => {
+  const handleDownload = (format: Format, isMp3: boolean) => {
     if (!info) return;
-    const downloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(format.url)}&ext=${format.container}&proxy=true&title=${encodeURIComponent(info.title)}${convertToMp3 ? '&mp3=true' : ''}`;
+    let downloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(format.url)}&ext=${format.container}&proxy=true&title=${encodeURIComponent(info.title)}`;
+    if (isMp3) {
+      downloadUrl += `&mp3=true`;
+      if (startTime) downloadUrl += `&start=${startTime}`;
+      if (endTime) downloadUrl += `&end=${endTime}`;
+    }
     window.open(downloadUrl, '_system');
   };
 
@@ -142,6 +168,7 @@ export default function App() {
             </div>
           </div>
           <button
+            id="analyze-btn"
             type="submit"
             disabled={loading}
             className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-black rounded-3xl transition-all shadow-xl shadow-indigo-600/20 active:scale-[0.98]"
@@ -175,15 +202,22 @@ export default function App() {
             </div>
 
             <div className="grid gap-3">
-              <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mb-1">Opciones Disponibles</h3>
-
-              <div className="flex items-center gap-3 p-5 bg-neutral-900/50 rounded-3xl border border-white/5 mb-2">
-                <input type="checkbox" id="mp3" checked={convertToMp3} onChange={(e) => setConvertToMp3(e.target.checked)} className="w-6 h-6 rounded-lg accent-indigo-500" />
-                <label htmlFor="mp3" className="text-sm text-neutral-300 font-bold italic">Modo MP3 de alta fidelidad</label>
+              <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mb-1">Corte Exacto a MP3</h3>
+              <div className="bg-neutral-900 border border-white/5 p-4 rounded-3xl mb-2">
+                <div className="flex gap-2">
+                  <input type="number" placeholder="Inicio (segundos)" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-1/2 bg-black/50 p-4 rounded-2xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                  <input type="number" placeholder="Fin (segundos)" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-1/2 bg-black/50 p-4 rounded-2xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                </div>
+                <button onClick={() => handleDownload(uniqueVideoFormats[0], true)} className="w-full mt-3 flex items-center justify-center p-4 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-2xl transition-all font-black text-sm uppercase tracking-wider">
+                  <Music className="w-5 h-5 mr-3" />
+                  Descargar como MP3
+                </button>
               </div>
 
+              <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mt-4 mb-1">Formatos Originales</h3>
+
               {uniqueVideoFormats.map((f, i) => (
-                <button key={i} onClick={() => handleDownload(f)} className="w-full flex items-center justify-between p-5 bg-neutral-900 border border-white/5 rounded-[2rem] active:scale-95 transition-all hover:bg-neutral-800/80">
+                <button key={i} onClick={() => handleDownload(f, false)} className="w-full flex items-center justify-between p-5 bg-neutral-900 border border-white/5 rounded-[2rem] active:scale-95 transition-all hover:bg-neutral-800/80">
                   <div className="flex items-center gap-5">
                     <div className="w-12 h-12 bg-indigo-500/10 rounded-2xl flex items-center justify-center">
                       <Film className="w-6 h-6 text-indigo-400" />

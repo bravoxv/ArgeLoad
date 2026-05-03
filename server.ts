@@ -266,7 +266,7 @@ async function startServer() {
   // API Route to proxy the download - since btch-downloader gives us direct links, we'll just redirect to them!
   app.get("/api/download", async (req, res) => {
     try {
-      const { url, ext, proxy, title, mp3 } = req.query;
+      const { url, ext, proxy, title, mp3, start, end } = req.query;
 
       if (!url || typeof url !== 'string') {
         return res.status(400).send("Missing required parameters");
@@ -300,14 +300,24 @@ async function startServer() {
 
       if (mp3 === 'true') {
         res.setHeader('Content-Type', 'audio/mpeg');
-        return ffmpeg(fetchRes.body)
+        let command = ffmpeg(fetchRes.body)
           .inputFormat(ext === 'mp4' ? 'mp4' : ext) // Handle simple case
           .toFormat('mp3')
           .on('error', (err) => {
             console.error("FFMPEG error:", err);
-            // Since headers might be sent, we can't easily change status, but this is a fallback
-          })
-          .pipe(res);
+          });
+
+        if (start) {
+          command = command.setStartTime(String(start));
+        }
+        if (end) {
+          const duration = Number(end) - Number(start || 0);
+          if (duration > 0) {
+            command = command.setDuration(duration);
+          }
+        }
+
+        return command.pipe(res);
       } else {
         if (ext === 'mp3') res.setHeader('Content-Type', 'audio/mpeg');
         else res.setHeader('Content-Type', 'video/mp4');
