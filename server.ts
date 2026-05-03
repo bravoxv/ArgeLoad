@@ -389,20 +389,21 @@ async function startServer() {
     const { start, end, quality } = req.body;
     const isImage = req.file.mimetype.startsWith("image/");
     const ext = isImage ? 'jpg' : 'mp4';
-    res.setHeader("Content-Disposition", `attachment; filename="argeload_studio.${ext}"`);
+    const outputFilename = `out_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+    const outputPath = path.join(__dirname, 'uploads', outputFilename);
 
     let command = ffmpeg(req.file.path).on("end", () => {
       fs.unlink(req.file!.path, () => { });
+      res.json({ success: true, downloadUrl: `${req.protocol}://${req.get('host')}/api/studio/download/${outputFilename}` });
     }).on("error", (err) => {
       console.error(err);
       fs.unlink(req.file!.path, () => { });
+      res.status(500).json({ error: "FFMPEG processing failed" });
     });
 
     if (isImage) {
-      res.setHeader("Content-Type", "image/jpeg");
-      command.outputOptions([`-q:v ${quality ? Math.floor(100 / quality * 3) : 2}`]).toFormat("image2").pipe(res);
+      command.outputOptions([`-q:v ${quality ? Math.floor(100 / quality * 3) : 2}`]).toFormat("image2").save(outputPath);
     } else {
-      res.setHeader("Content-Type", "video/mp4");
       if (start) command = command.setStartTime(String(start));
       if (end) {
         const getSec = (t: string) => t.split(':').reverse().reduce((acc, val, i) => acc + (Number(val) * Math.pow(60, i)), 0);
@@ -410,15 +411,24 @@ async function startServer() {
         if (duration > 0) command = command.setDuration(duration);
       }
 
-      // If quality compress is requested
       if (quality && Number(quality) < 100) {
         const crf = Math.floor(18 + ((100 - Number(quality)) / 100) * 33);
         command = command.outputOptions(['-c:v libx264', `-crf ${crf}`, '-preset ultrafast']);
       } else {
         command = command.outputOptions(['-c copy']);
       }
-      command.outputOptions(['-movflags', 'frag_keyframe+empty_moov']).toFormat("mp4").pipe(res);
+      command.toFormat("mp4").save(outputPath);
     }
+  });
+
+  app.get("/api/studio/download/:filename", (req, res) => {
+    const filePath = path.join(__dirname, 'uploads', req.params.filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).send("File not found or expired");
+    }
+    res.download(filePath, `argeload_local_edit.${filePath.split('.').pop()}`, (err) => {
+      fs.unlink(filePath, () => { });
+    });
   });
 
   // Vite middleware for development

@@ -148,15 +148,10 @@ export default function App() {
         body: formData,
       });
 
-      if (!response.ok) throw new Error("Fallo en el servidor al procesar el archivo local");
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || "Fallo en el servidor al procesar el archivo local");
 
-      const blob = await response.blob();
-      const objUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = objUrl;
-      a.download = `argeload_edit_${localFile.name}`;
-      a.click();
-      URL.revokeObjectURL(objUrl);
+      window.open(data.downloadUrl, '_system');
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -191,6 +186,20 @@ export default function App() {
           <button onClick={() => setTab('local')} className={`flex-1 py-3 text-sm font-black rounded-2xl transition-all ${tab === 'local' ? 'bg-sky-600 shadow-lg text-white' : 'text-neutral-500 hover:text-white'}`}>Herramientas Locales</button>
         </div>
 
+        {loading && (
+          <div className="mb-10 animate-pulse">
+            <div className="h-3 w-full bg-neutral-900 rounded-full overflow-hidden">
+              <div className="h-full bg-sky-500 transition-all duration-300 shadow-[0_0_15px_rgba(56,189,248,0.5)]" style={{ width: `${progress}%` }} />
+            </div>
+            <p className="text-[10px] text-center text-neutral-500 mt-3 font-black tracking-widest uppercase">
+              {tab === 'web' ? 'Procesando calidad: ' : 'Comprimiendo archivo, por favor espera... '}
+              {progress}%
+            </p>
+          </div>
+        )}
+
+        {error && <div className="p-5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-3xl text-xs font-bold text-center mb-8 animate-bounce">{error}</div>}
+
         {tab === 'web' && (
           <div className="animate-in fade-in slide-in-from-bottom-5 duration-700">
             <form onSubmit={handleAnalyze} className="space-y-4 mb-10">
@@ -218,16 +227,6 @@ export default function App() {
               </button>
             </form>
 
-            {loading && (
-              <div className="mb-10 animate-pulse">
-                <div className="h-3 w-full bg-neutral-900 rounded-full overflow-hidden">
-                  <div className="h-full bg-indigo-500 transition-all duration-300 shadow-[0_0_15px_rgba(99,102,241,0.5)]" style={{ width: `${progress}%` }} />
-                </div>
-                <p className="text-[10px] text-center text-neutral-500 mt-3 font-black tracking-widest uppercase">Procesando calidad: {progress}%</p>
-              </div>
-            )}
-
-            {error && <div className="p-5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-3xl text-xs font-bold text-center mb-8 animate-bounce">{error}</div>}
 
             {info && !loading && (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-700">
