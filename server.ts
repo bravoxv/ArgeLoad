@@ -321,6 +321,29 @@ async function startServer() {
       } else {
         if (ext === 'mp3') res.setHeader('Content-Type', 'audio/mpeg');
         else res.setHeader('Content-Type', 'video/mp4');
+
+        if (start || end) {
+          let command = ffmpeg(fetchRes.body)
+            .inputFormat(ext === 'mp4' ? 'mp4' : ext)
+            .toFormat(ext === 'mp4' ? 'mp4' : ext)
+            .outputOptions(['-movflags', 'frag_keyframe+empty_moov']) // Crucial for mp4 streaming output
+            .on('error', (err) => console.error("FFMPEG video trim error:", err));
+
+          if (start) command = command.setStartTime(String(start));
+
+          if (end) {
+            // Convert text to total seconds for subtraction
+            const getSec = (t: string) => {
+              let parts = t.toString().split(':').reverse();
+              return parts.reduce((acc, val, i) => acc + (Number(val) * Math.pow(60, i)), 0);
+            };
+            const duration = getSec(String(end)) - getSec(String(start || '0'));
+            if (duration > 0) command = command.setDuration(duration);
+          }
+
+          return command.pipe(res);
+        }
+
         if (fetchRes.body) {
           return fetchRes.body.pipe(res);
         }

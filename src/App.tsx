@@ -125,9 +125,9 @@ export default function App() {
     let downloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(format.url)}&ext=${format.container}&proxy=true&title=${encodeURIComponent(info.title)}`;
     if (isMp3) {
       downloadUrl += `&mp3=true`;
-      if (startTime) downloadUrl += `&start=${startTime}`;
-      if (endTime) downloadUrl += `&end=${endTime}`;
     }
+    if (startTime) downloadUrl += `&start=${encodeURIComponent(startTime)}`;
+    if (endTime) downloadUrl += `&end=${encodeURIComponent(endTime)}`;
     window.open(downloadUrl, '_system');
   };
 
@@ -202,19 +202,23 @@ export default function App() {
             </div>
 
             <div className="grid gap-3">
-              <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mb-1">Corte Exacto a MP3</h3>
-              <div className="bg-neutral-900 border border-white/5 p-4 rounded-3xl mb-2">
+              <div className="bg-neutral-900 border border-white/5 p-4 rounded-3xl mb-4">
+                <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mb-2">Corte Preciso (Opcional)</h3>
                 <div className="flex gap-2">
-                  <input type="number" placeholder="Inicio (segundos)" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-1/2 bg-black/50 p-4 rounded-2xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
-                  <input type="number" placeholder="Fin (segundos)" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-1/2 bg-black/50 p-4 rounded-2xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                  <input type="text" placeholder="Inicio (Ej: 1:30 o 90)" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-1/2 bg-black/50 p-4 rounded-2xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                  <input type="text" placeholder="Fin (Ej: 2:05 o 125)" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-1/2 bg-black/50 p-4 rounded-2xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
                 </div>
-                <button onClick={() => handleDownload(uniqueVideoFormats[0], true)} className="w-full mt-3 flex items-center justify-center p-4 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-2xl transition-all font-black text-sm uppercase tracking-wider">
+              </div>
+
+              <div className="bg-neutral-900 border border-white/5 p-4 rounded-3xl mb-2">
+                <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mb-2">Solo Audio</h3>
+                <button onClick={() => handleDownload(uniqueVideoFormats[0], true)} className="w-full flex items-center justify-center p-4 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-2xl transition-all font-black text-sm uppercase tracking-wider">
                   <Music className="w-5 h-5 mr-3" />
                   Descargar como MP3
                 </button>
               </div>
 
-              <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mt-4 mb-1">Formatos Originales</h3>
+              <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mt-4 mb-1">Formatos de Video Original</h3>
 
               {uniqueVideoFormats.map((f, i) => (
                 <button key={i} onClick={() => handleDownload(f, false)} className="w-full flex items-center justify-between p-5 bg-neutral-900 border border-white/5 rounded-[2rem] active:scale-95 transition-all hover:bg-neutral-800/80">
