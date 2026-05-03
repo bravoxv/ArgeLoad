@@ -5,10 +5,7 @@ import React, { useState, useEffect } from "react";
 // 1. Abre la terminal y escribe 'ipconfig'
 // 2. Busca 'IPv4 Address' (ej. 192.168.1.15)
 // 3. Ponla aquí abajo:
-const SERVER_IP = "192.168.0.10";
-// En un celular o emulador, localhost o 127.0.0.1 referencian al propio dispositivo, no a tu PC.
-// Por eso forzamos a que siempre use directamente la IP local de tu PC:
-const API_BASE_URL = `http://${SERVER_IP}:3000`;
+const API_BASE_URL = "https://omnidown-backend.onrender.com";
 
 interface Format {
   itag: number;
@@ -77,20 +74,31 @@ export default function App() {
     setError(null);
     setInfo(null);
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/info`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+    // Simulamos la carga visual para dar feedback, 
+    // pero la extracción real se hará al dar click en 'Descargar'
+    setTimeout(() => {
+      setInfo({
+        title: "Contenido Detectado",
+        author: "Extracción Nativa del Celular",
+        thumbnail: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800&q=80",
+        platform: "Multired",
+        duration: "",
+        description: "",
+        formats: [
+          {
+            itag: 1,
+            mimeType: "video/mp4",
+            qualityLabel: "Mejor Calidad Disponible",
+            bitrate: 0,
+            hasVideo: true,
+            hasAudio: true,
+            container: "multiformato",
+            url: url // Guardamos la url original ingresada
+          }
+        ]
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Error al analizar");
-      setInfo(data);
-    } catch (err: any) {
-      setError(`Error de conexión: Verifica que el servidor esté en ${API_BASE_URL}`);
-    } finally {
       setLoading(false);
-    }
+    }, 1500);
   };
 
   const handlePaste = async () => {
@@ -102,17 +110,44 @@ export default function App() {
     }
   };
 
-  const handleDownload = (format: Format) => {
+  const handleDownload = async (format: Format) => {
     if (!info) return;
-    const downloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(format.url)}&ext=${format.container}&proxy=true&title=${encodeURIComponent(info.title)}${convertToMp3 ? '&mp3=true' : ''}`;
-    window.open(downloadUrl, '_system');
+
+    // Obtenemos el archivo puro usando un servidor público gratuito de internet
+    try {
+      const response = await fetch("https://api.cobalt.tools/api/json", {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          url: format.url,
+          isAudioOnly: convertToMp3,
+          aFormat: convertToMp3 ? "mp3" : "best"
+        }),
+      });
+      const data = await response.json();
+
+      if (data.status === "error") throw new Error(data.text);
+
+      // Cobalt devuelve 'picker' si hay múltiples archivos, o 'url' si es directo
+      const finalUrl = data.status === "picker" && data.picker ? data.picker[0].url : data.url;
+
+      if (!finalUrl) throw new Error("No se pudo obtener el enlace de descarga.");
+
+      window.open(finalUrl, '_system');
+
+    } catch (err: any) {
+      setError("Error en descarga externa: " + (err.message || 'Contenido bloqueado.'));
+    }
   };
 
   const videoFormats = info?.formats.filter((f) => f.hasVideo && f.hasAudio) || [];
   const videoOnlyFormats = info?.formats.filter((f) => f.hasVideo && !f.hasAudio) || [];
 
   const uniqueVideoFormats = Array.from(
-    new Map([...videoFormats, ...videoOnlyFormats].sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0)).map((item) => [`${item.qualityLabel}-${item.container}`, item])).values()
+    new Map([...videoFormats].sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0)).map((item) => [`${item.qualityLabel}-${item.container}`, item])).values()
   ).filter((f) => f.qualityLabel !== 'Audio Only' && f.qualityLabel != null);
 
   return (
@@ -137,7 +172,7 @@ export default function App() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="Pega el link aquí..."
-              className="w-full bg-transparent px-6 py-5 text-white placeholder-neutral-600 focus:outline-none text-base"
+              className="w-full bg-transparent pl-6 pr-24 py-5 text-white placeholder-neutral-600 focus:outline-none text-base"
             />
             <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
               {url && <button type="button" onClick={() => setUrl("")} className="p-2 text-neutral-500 hover:text-white"><X size={22} /></button>}
