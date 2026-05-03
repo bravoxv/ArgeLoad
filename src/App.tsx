@@ -74,31 +74,20 @@ export default function App() {
     setError(null);
     setInfo(null);
 
-    // Simulamos la carga visual para dar feedback, 
-    // pero la extracción real se hará al dar click en 'Descargar'
-    setTimeout(() => {
-      setInfo({
-        title: "Contenido Detectado",
-        author: "Extracción Nativa del Celular",
-        thumbnail: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800&q=80",
-        platform: "Multired",
-        duration: "",
-        description: "",
-        formats: [
-          {
-            itag: 1,
-            mimeType: "video/mp4",
-            qualityLabel: "Mejor Calidad Disponible",
-            bitrate: 0,
-            hasVideo: true,
-            hasAudio: true,
-            container: "multiformato",
-            url: url // Guardamos la url original ingresada
-          }
-        ]
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/info`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
       });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Error al analizar");
+      setInfo(data);
+    } catch (err: any) {
+      setError(`Error de conexión: Verifica que el servidor esté en ${API_BASE_URL}`);
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   const handlePaste = async () => {
@@ -110,37 +99,10 @@ export default function App() {
     }
   };
 
-  const handleDownload = async (format: Format) => {
+  const handleDownload = (format: Format) => {
     if (!info) return;
-
-    // Obtenemos el archivo puro usando un servidor público gratuito de internet
-    try {
-      const response = await fetch("https://api.cobalt.tools/api/json", {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          url: format.url,
-          isAudioOnly: convertToMp3,
-          aFormat: convertToMp3 ? "mp3" : "best"
-        }),
-      });
-      const data = await response.json();
-
-      if (data.status === "error") throw new Error(data.text);
-
-      // Cobalt devuelve 'picker' si hay múltiples archivos, o 'url' si es directo
-      const finalUrl = data.status === "picker" && data.picker ? data.picker[0].url : data.url;
-
-      if (!finalUrl) throw new Error("No se pudo obtener el enlace de descarga.");
-
-      window.open(finalUrl, '_system');
-
-    } catch (err: any) {
-      setError("Error en descarga externa: " + (err.message || 'Contenido bloqueado.'));
-    }
+    const downloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(format.url)}&ext=${format.container}&proxy=true&title=${encodeURIComponent(info.title)}${convertToMp3 ? '&mp3=true' : ''}`;
+    window.open(downloadUrl, '_system');
   };
 
   const videoFormats = info?.formats.filter((f) => f.hasVideo && f.hasAudio) || [];
