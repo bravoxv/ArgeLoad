@@ -23,6 +23,19 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  const uploadsDir = path.join(__dirname, 'uploads');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  } else {
+    try {
+      fs.readdirSync(uploadsDir).forEach(file => {
+        fs.unlink(path.join(uploadsDir, file), () => { });
+      });
+    } catch (e) {
+      console.error("Cleanup error", e);
+    }
+  }
+
   app.use(cors());
   app.use(express.json());
 
@@ -409,7 +422,14 @@ async function startServer() {
 
     let command = ffmpeg(req.file.path).on("end", () => {
       fs.unlink(req.file!.path, () => { });
-      res.json({ success: true, downloadUrl: `${req.protocol}://${req.get('host')}/api/studio/download/${outputFilename}` });
+      res.json({ success: true, downloadUrl: `/api/studio/download/${outputFilename}` });
+
+      // Clean up the file after 30 minutes to save space instead of doing it on download
+      setTimeout(() => {
+        if (fs.existsSync(outputPath)) {
+          fs.unlink(outputPath, () => { });
+        }
+      }, 30 * 60 * 1000); // 30 mins
     }).on("error", (err) => {
       console.error(err);
       fs.unlink(req.file!.path, () => { });
@@ -441,9 +461,8 @@ async function startServer() {
     if (!fs.existsSync(filePath)) {
       return res.status(404).send("File not found or expired");
     }
-    res.download(filePath, `argeload_local_edit.${filePath.split('.').pop()}`, (err) => {
-      fs.unlink(filePath, () => { });
-    });
+    // Remove fs.unlink to avoid Android Download Manager failing the request when it restarts it.
+    res.download(filePath, `argeload_local_edit.${filePath.split('.').pop()}`);
   });
 
   // Vite middleware for development

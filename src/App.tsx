@@ -151,7 +151,12 @@ export default function App() {
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || "Fallo en el servidor al procesar el archivo local");
 
-      window.open(data.downloadUrl, '_system');
+      let finalDownloadUrl = data.downloadUrl;
+      if (finalDownloadUrl.startsWith('/')) {
+        finalDownloadUrl = `${API_BASE_URL}${finalDownloadUrl}`;
+      }
+
+      window.open(finalDownloadUrl, '_system');
     } catch (err: any) {
       setError(err.message);
     } finally {
