@@ -160,11 +160,15 @@ export default function App() {
   };
 
   const videoFormats = info?.formats.filter((f) => f.hasVideo && f.hasAudio) || [];
-  const videoOnlyFormats = info?.formats.filter((f) => f.hasVideo && !f.hasAudio) || [];
+  const imageFormats = info?.formats.filter((f) => !f.hasVideo && !f.hasAudio && f.mimeType.startsWith('image')) || [];
 
   const uniqueVideoFormats = Array.from(
     new Map([...videoFormats].sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0)).map((item) => [`${item.qualityLabel}-${item.container}`, item])).values()
   ).filter((f) => f.qualityLabel !== 'Audio Only' && f.qualityLabel != null);
+
+  const uniqueImageFormats = Array.from(
+    new Map([...imageFormats].map((item) => [`${item.qualityLabel}-${item.container}`, item])).values()
+  );
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-50 p-4 font-sans">
@@ -244,14 +248,18 @@ export default function App() {
                 <div className="grid gap-3">
                   <div className="grid gap-3">
                     <div className="bg-neutral-900 border border-white/5 p-4 rounded-3xl mb-2">
-                      <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mb-2">Extracción Rápida</h3>
-                      <button onClick={() => handleDownload(uniqueVideoFormats[0], true)} className="w-full flex items-center justify-center p-4 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-2xl transition-all font-black text-sm uppercase tracking-wider">
-                        <Music className="w-5 h-5 mr-3" />
-                        Descargar como MP3
-                      </button>
+                      <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mb-2">Solo Audio</h3>
+                      {uniqueVideoFormats.length > 0 ? (
+                        <button onClick={() => handleDownload(uniqueVideoFormats[0], true)} className="w-full flex items-center justify-center p-4 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-2xl transition-all font-black text-sm uppercase tracking-wider">
+                          <Music className="w-5 h-5 mr-3" />
+                          Descargar como MP3
+                        </button>
+                      ) : (
+                        <p className="text-xs text-neutral-500 text-center font-bold">No hay audio disponible.</p>
+                      )}
                     </div>
 
-                    <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mt-4 mb-1">Formatos de Video Original</h3>
+                    {uniqueVideoFormats.length > 0 && <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mt-4 mb-1">Formatos de Video Original</h3>}
 
                     {uniqueVideoFormats.map((f, i) => (
                       <button key={i} onClick={() => handleDownload(f, false)} className="w-full flex items-center justify-between p-5 bg-neutral-900 border border-white/5 rounded-[2rem] active:scale-95 transition-all hover:bg-neutral-800/80">
@@ -269,6 +277,19 @@ export default function App() {
                         </div>
                       </button>
                     ))}
+
+                    {uniqueImageFormats.length > 0 && <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mt-5 mb-1 text-sky-400">Colección de Imágenes</h3>}
+
+                    <div className="grid grid-cols-2 gap-3">
+                      {uniqueImageFormats.map((f, i) => (
+                        <button key={`img-${i}`} onClick={() => handleDownload(f, false)} className="w-full flex flex-col items-center justify-center p-4 bg-sky-900/10 border border-sky-500/20 rounded-[1.5rem] active:scale-95 transition-all hover:bg-sky-900/40 relative overflow-hidden group">
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-all z-0"></div>
+                          <ImageIcon className="w-8 h-8 text-sky-400 mb-2 z-10" />
+                          <p className="text-xs font-black text-white z-10">{f.qualityLabel}</p>
+                          <p className="text-[9px] text-sky-200/50 font-bold uppercase z-10">{f.container}</p>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>

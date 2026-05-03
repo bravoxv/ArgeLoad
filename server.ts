@@ -38,8 +38,8 @@ async function startServer() {
 
       console.log(`Extracting: ${url}`);
 
-      // If TikTok, Instagram, Pinterest, Kick, or Twitch, use yt-dlp explicitly
-      if (url.includes('tiktok.com') || url.includes('instagram.com') || url.includes('pinterest.com') || url.includes('kick.com') || url.includes('twitch.tv')) {
+      // If Pinterest, Kick, or Twitch, use yt-dlp explicitly
+      if (url.includes('pinterest.com') || url.includes('kick.com') || url.includes('twitch.tv')) {
         try {
           const info = await ytdl(url, {
             dumpSingleJson: true,
@@ -180,11 +180,20 @@ async function startServer() {
         const ig = await import('btch-downloader').then(m => m.igdl(url)).catch(() => null);
         if (ig && ig.status && ig.result && ig.result.length > 0) {
           info = ig;
-          baseData.title = "Reel/Post de Instagram";
-          baseData.thumbnail = ig.result[0].thumbnail || "";
-          ig.result.forEach((res: any) => {
+          baseData.title = "Post/Reel de Instagram";
+          baseData.thumbnail = ig.result[0].thumbnail || ig.result[0].url || "";
+          ig.result.forEach((res: any, idx: number) => {
             if (res.url) {
-              formats.push({ itag: 137, mimeType: 'video/mp4', qualityLabel: 'HD', bitrate: 3000000, hasVideo: true, hasAudio: true, container: 'mp4', url: res.url });
+              const isImg = res.url.includes('.jpg') || res.url.includes('.webp') || res.url.includes('n.jpg') || res.url.includes('n.webp') || !res.url.includes('.mp4');
+              formats.push({
+                itag: 137 + idx,
+                mimeType: isImg ? 'image/jpeg' : 'video/mp4',
+                qualityLabel: isImg ? `Imagen ${idx + 1}` : `Video ${idx + 1}`,
+                hasVideo: !isImg,
+                hasAudio: !isImg,
+                container: isImg ? 'jpg' : 'mp4',
+                url: res.url
+              });
             }
           });
         }
@@ -193,8 +202,14 @@ async function startServer() {
         const tt = await import('btch-downloader').then(m => m.ttdl(url)).catch(() => null);
         if (tt && tt.status) {
           info = tt;
-          baseData.title = tt.title || "Video de TikTok";
+          baseData.title = tt.title || "Video/Fotos de TikTok";
           baseData.thumbnail = tt.thumbnail || "";
+
+          if (tt.images && tt.images.length > 0) {
+            tt.images.forEach((imgUrl: string, idx: number) => {
+              formats.push({ itag: 1000 + idx, mimeType: 'image/jpeg', qualityLabel: `Foto ${idx + 1}`, hasVideo: false, hasAudio: false, container: 'jpg', url: imgUrl });
+            });
+          }
 
           if (tt.video && tt.video.length > 0) {
             tt.video.forEach((v: string) => {
