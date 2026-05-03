@@ -144,12 +144,10 @@ export default function App() {
       <main className="max-w-md mx-auto py-8">
 
         <header className="flex flex-col items-center text-center space-y-4 mb-8">
-          <div className="p-2 bg-neutral-900 rounded-3xl border border-sky-500/20 shadow-inner overflow-hidden flex items-center justify-center">
-            <img src="/logo_bxv.png" alt="BXV Logo" className="w-16 h-16 object-cover rounded-2xl" />
-          </div>
+          <img src="/logo_bxv.png" alt="BXV Logo" className="w-28 h-28 object-contain mix-blend-screen pointer-events-none drop-shadow-2xl" />
           <div>
             <h1 onClick={() => setClicks(c => c + 1)} className="text-4xl font-black tracking-tighter text-white select-none relative cursor-pointer">
-              ArgeDownload
+              ArgeLoad
               {clicks >= 3 && <span className="absolute -top-4 -right-10 text-3xl animate-bounce">🇦🇷</span>}
             </h1>
             <p className="text-neutral-500 text-xs font-bold uppercase tracking-widest mt-1">Descargador Nacional</p>
