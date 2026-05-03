@@ -39,6 +39,9 @@ export default function App() {
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [clicks, setClicks] = useState(0);
+  const [tab, setTab] = useState<'web' | 'local'>('web');
+  const [localFile, setLocalFile] = useState<File | null>(null);
+  const [quality, setQuality] = useState(60);
 
   useEffect(() => {
     let interval: any;
@@ -124,12 +127,41 @@ export default function App() {
   const handleDownload = (format: Format, isMp3: boolean) => {
     if (!info) return;
     let downloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(format.url)}&ext=${format.container}&proxy=true&title=${encodeURIComponent(info.title)}`;
-    if (isMp3) {
-      downloadUrl += `&mp3=true`;
-    }
-    if (startTime) downloadUrl += `&start=${encodeURIComponent(startTime)}`;
-    if (endTime) downloadUrl += `&end=${encodeURIComponent(endTime)}`;
+    if (isMp3) downloadUrl += `&mp3=true`;
     window.open(downloadUrl, '_system');
+  };
+
+  const handleLocalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!localFile) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', localFile);
+      formData.append('quality', String(quality));
+      if (startTime) formData.append('start', startTime);
+      if (endTime) formData.append('end', endTime);
+
+      const response = await fetch(`${API_BASE_URL}/api/studio`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error("Fallo en el servidor al procesar el archivo local");
+
+      const blob = await response.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = `argeload_edit_${localFile.name}`;
+      a.click();
+      URL.revokeObjectURL(objUrl);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const videoFormats = info?.formats.filter((f) => f.hasVideo && f.hasAudio) || [];
@@ -150,96 +182,135 @@ export default function App() {
               ArgeLoad
               {clicks >= 3 && <span className="absolute -top-4 -right-10 text-3xl animate-bounce">🇦🇷</span>}
             </h1>
-            <p className="text-neutral-500 text-xs font-bold uppercase tracking-widest mt-1">Descargador Nacional</p>
+            <p className="text-neutral-500 text-xs font-bold uppercase tracking-widest mt-1">Suite Media Local y en la Nube</p>
           </div>
         </header>
 
-        <form onSubmit={handleAnalyze} className="space-y-4 mb-10">
-          <div className="relative bg-neutral-900 rounded-3xl border border-white/5 shadow-2xl overflow-hidden focus-within:ring-2 ring-indigo-500/50 transition-all">
-            <input
-              type="url"
-              required
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="Pega el link aquí..."
-              className="w-full bg-transparent pl-6 pr-24 py-5 text-white placeholder-neutral-600 focus:outline-none text-base"
-            />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
-              {url && <button type="button" onClick={() => setUrl("")} className="p-2 text-neutral-500 hover:text-white"><X size={22} /></button>}
-              <button type="button" onClick={handlePaste} className="p-2 text-indigo-400 active:scale-90 transition-transform"><Clipboard size={22} /></button>
-            </div>
-          </div>
-          <button
-            id="analyze-btn"
-            type="submit"
-            disabled={loading}
-            className="w-full py-5 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-black rounded-3xl transition-all shadow-xl shadow-sky-600/20 active:scale-[0.98]"
-          >
-            {loading ? <Loader2 className="animate-spin mx-auto w-6 h-6" /> : "ANALIZAR CONTENIDO"}
-          </button>
-        </form>
+        <div className="flex w-full bg-neutral-900 border border-white/5 rounded-3xl p-1 mb-8">
+          <button onClick={() => setTab('web')} className={`flex-1 py-3 text-sm font-black rounded-2xl transition-all ${tab === 'web' ? 'bg-sky-600 shadow-lg text-white' : 'text-neutral-500 hover:text-white'}`}>Descargar Link</button>
+          <button onClick={() => setTab('local')} className={`flex-1 py-3 text-sm font-black rounded-2xl transition-all ${tab === 'local' ? 'bg-sky-600 shadow-lg text-white' : 'text-neutral-500 hover:text-white'}`}>Herramientas Locales</button>
+        </div>
 
-        {loading && (
-          <div className="mb-10 animate-pulse">
-            <div className="h-3 w-full bg-neutral-900 rounded-full overflow-hidden">
-              <div className="h-full bg-indigo-500 transition-all duration-300 shadow-[0_0_15px_rgba(99,102,241,0.5)]" style={{ width: `${progress}%` }} />
-            </div>
-            <p className="text-[10px] text-center text-neutral-500 mt-3 font-black tracking-widest uppercase">Procesando calidad: {progress}%</p>
+        {tab === 'web' && (
+          <div className="animate-in fade-in slide-in-from-bottom-5 duration-700">
+            <form onSubmit={handleAnalyze} className="space-y-4 mb-10">
+              <div className="relative bg-neutral-900 rounded-3xl border border-white/5 shadow-2xl overflow-hidden focus-within:ring-2 ring-indigo-500/50 transition-all">
+                <input
+                  type="url"
+                  required
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="Pega el link aquí..."
+                  className="w-full bg-transparent pl-6 pr-24 py-5 text-white placeholder-neutral-600 focus:outline-none text-base"
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
+                  {url && <button type="button" onClick={() => setUrl("")} className="p-2 text-neutral-500 hover:text-white"><X size={22} /></button>}
+                  <button type="button" onClick={handlePaste} className="p-2 text-indigo-400 active:scale-90 transition-transform"><Clipboard size={22} /></button>
+                </div>
+              </div>
+              <button
+                id="analyze-btn"
+                type="submit"
+                disabled={loading}
+                className="w-full py-5 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-black rounded-3xl transition-all shadow-xl shadow-sky-600/20 active:scale-[0.98]"
+              >
+                {loading ? <Loader2 className="animate-spin mx-auto w-6 h-6" /> : "ANALIZAR CONTENIDO"}
+              </button>
+            </form>
+
+            {loading && (
+              <div className="mb-10 animate-pulse">
+                <div className="h-3 w-full bg-neutral-900 rounded-full overflow-hidden">
+                  <div className="h-full bg-indigo-500 transition-all duration-300 shadow-[0_0_15px_rgba(99,102,241,0.5)]" style={{ width: `${progress}%` }} />
+                </div>
+                <p className="text-[10px] text-center text-neutral-500 mt-3 font-black tracking-widest uppercase">Procesando calidad: {progress}%</p>
+              </div>
+            )}
+
+            {error && <div className="p-5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-3xl text-xs font-bold text-center mb-8 animate-bounce">{error}</div>}
+
+            {info && !loading && (
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-700">
+                <div className="rounded-[2.5rem] overflow-hidden border border-white/10 aspect-video relative shadow-2xl group">
+                  <img src={info.thumbnail} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent flex flex-col justify-end p-6">
+                    <h2 className="font-black text-lg text-white leading-tight mb-1">{info.title}</h2>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 bg-indigo-600 rounded-md text-[9px] font-black uppercase">{info.platform}</span>
+                      <p className="text-[11px] text-neutral-400 font-medium truncate">{info.author}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-3">
+                  <div className="grid gap-3">
+                    <div className="bg-neutral-900 border border-white/5 p-4 rounded-3xl mb-2">
+                      <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mb-2">Extracción Rápida</h3>
+                      <button onClick={() => handleDownload(uniqueVideoFormats[0], true)} className="w-full flex items-center justify-center p-4 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-2xl transition-all font-black text-sm uppercase tracking-wider">
+                        <Music className="w-5 h-5 mr-3" />
+                        Descargar como MP3
+                      </button>
+                    </div>
+
+                    <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mt-4 mb-1">Formatos de Video Original</h3>
+
+                    {uniqueVideoFormats.map((f, i) => (
+                      <button key={i} onClick={() => handleDownload(f, false)} className="w-full flex items-center justify-between p-5 bg-neutral-900 border border-white/5 rounded-[2rem] active:scale-95 transition-all hover:bg-neutral-800/80">
+                        <div className="flex items-center gap-5">
+                          <div className="w-12 h-12 bg-indigo-500/10 rounded-2xl flex items-center justify-center">
+                            <Film className="w-6 h-6 text-indigo-400" />
+                          </div>
+                          <div className="text-left">
+                            <p className="text-sm font-black text-white">{f.qualityLabel}</p>
+                            <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-tighter">{f.container} • {formatBytes(f.contentLength)}</p>
+                          </div>
+                        </div>
+                        <div className="bg-white/5 p-3 rounded-full">
+                          <Download className="w-5 h-5 text-indigo-400" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {error && <div className="p-5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-3xl text-xs font-bold text-center mb-8 animate-bounce">{error}</div>}
-
-        {info && !loading && (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-700">
-            <div className="rounded-[2.5rem] overflow-hidden border border-white/10 aspect-video relative shadow-2xl group">
-              <img src={info.thumbnail} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent flex flex-col justify-end p-6">
-                <h2 className="font-black text-lg text-white leading-tight mb-1">{info.title}</h2>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 bg-indigo-600 rounded-md text-[9px] font-black uppercase">{info.platform}</span>
-                  <p className="text-[11px] text-neutral-400 font-medium truncate">{info.author}</p>
-                </div>
+        {tab === 'local' && (
+          <form onSubmit={handleLocalSubmit} className="space-y-4 mb-10 animate-in fade-in slide-in-from-bottom-5 duration-700">
+            <div className="p-6 bg-neutral-900 border border-white/5 rounded-3xl space-y-5 shadow-2xl">
+              <div>
+                <h3 className="text-[11px] font-black text-neutral-500 uppercase tracking-[0.2em] mb-2">1. Selecciona Archivo</h3>
+                <input type="file" onChange={(e) => setLocalFile(e.target.files ? e.target.files[0] : null)} className="w-full text-sm text-neutral-400 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-sky-500/10 file:text-sky-400 focus:outline-none hover:file:bg-sky-500/20 cursor-pointer transition-all" />
               </div>
-            </div>
 
-            <div className="grid gap-3">
-              <div className="bg-neutral-900 border border-white/5 p-4 rounded-3xl mb-4">
-                <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mb-2">Corte Preciso (Opcional)</h3>
+              <div>
+                <h3 className="text-[11px] font-black text-neutral-500 uppercase tracking-[0.2em] mb-2 flex justify-between">
+                  <span>2. Calidad de Compresión</span>
+                  <span className="text-sky-400">{quality}%</span>
+                </h3>
+                <input type="range" min="10" max="100" value={quality} onChange={(e) => setQuality(Number(e.target.value))} className="w-full accent-sky-500 h-2 bg-black/40 rounded-full appearance-none cursor-pointer" />
+                <p className="text-[9px] text-neutral-600 text-center font-bold mt-1">Bajar calidad reducirá increíblemente el tamaño del archivo.</p>
+              </div>
+
+              <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
+                <h3 className="text-[11px] font-black text-neutral-500 uppercase tracking-[0.2em] mb-3">3. Recortar Video (Opcional)</h3>
                 <div className="flex gap-2">
-                  <input type="text" placeholder="Inicio (Ej: 1:30 o 90)" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-1/2 bg-black/50 p-4 rounded-2xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
-                  <input type="text" placeholder="Fin (Ej: 2:05 o 125)" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-1/2 bg-black/50 p-4 rounded-2xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                  <input type="text" placeholder="Inicio (Ej: 0:10)" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-1/2 bg-black/50 p-4 rounded-xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all font-medium" />
+                  <input type="text" placeholder="Fin (Ej: 1:05)" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-1/2 bg-black/50 p-4 rounded-xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all font-medium" />
                 </div>
               </div>
 
-              <div className="bg-neutral-900 border border-white/5 p-4 rounded-3xl mb-2">
-                <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mb-2">Solo Audio</h3>
-                <button onClick={() => handleDownload(uniqueVideoFormats[0], true)} className="w-full flex items-center justify-center p-4 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-2xl transition-all font-black text-sm uppercase tracking-wider">
-                  <Music className="w-5 h-5 mr-3" />
-                  Descargar como MP3
-                </button>
-              </div>
-
-              <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mt-4 mb-1">Formatos de Video Original</h3>
-
-              {uniqueVideoFormats.map((f, i) => (
-                <button key={i} onClick={() => handleDownload(f, false)} className="w-full flex items-center justify-between p-5 bg-neutral-900 border border-white/5 rounded-[2rem] active:scale-95 transition-all hover:bg-neutral-800/80">
-                  <div className="flex items-center gap-5">
-                    <div className="w-12 h-12 bg-indigo-500/10 rounded-2xl flex items-center justify-center">
-                      <Film className="w-6 h-6 text-indigo-400" />
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-black text-white">{f.qualityLabel}</p>
-                      <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-tighter">{f.container} • {formatBytes(f.contentLength)}</p>
-                    </div>
-                  </div>
-                  <div className="bg-white/5 p-3 rounded-full">
-                    <Download className="w-5 h-5 text-indigo-400" />
-                  </div>
-                </button>
-              ))}
+              <button
+                type="submit"
+                disabled={loading || !localFile}
+                className="w-full py-5 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-black rounded-2xl transition-all shadow-xl shadow-sky-600/20 active:scale-[0.98]"
+              >
+                {loading ? <Loader2 className="animate-spin mx-auto w-6 h-6" /> : "PROCESAR ARCHIVO LOCAL"}
+              </button>
             </div>
-          </div>
+          </form>
         )}
 
       </main>

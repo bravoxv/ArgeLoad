@@ -8,6 +8,10 @@ import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 import fetch from 'node-fetch';
 import ytdl from 'youtube-dl-exec';
+import multer from 'multer';
+import fs from 'fs';
+
+const upload = multer({ dest: 'uploads/' });
 
 if (ffmpegStatic) {
   ffmpeg.setFfmpegPath(ffmpegStatic);
@@ -379,6 +383,43 @@ async function startServer() {
     }
   });
 
+
+  app.post("/api/studio", upload.single("file"), (req, res) => {
+    if (!req.file) return res.status(400).send("No file uploaded");
+    const { start, end, quality } = req.body;
+    const isImage = req.file.mimetype.startsWith("image/");
+    const ext = isImage ? 'jpg' : 'mp4';
+    res.setHeader("Content-Disposition", `attachment; filename="argeload_studio.${ext}"`);
+
+    let command = ffmpeg(req.file.path).on("end", () => {
+      fs.unlink(req.file!.path, () => { });
+    }).on("error", (err) => {
+      console.error(err);
+      fs.unlink(req.file!.path, () => { });
+    });
+
+    if (isImage) {
+      res.setHeader("Content-Type", "image/jpeg");
+      command.outputOptions([`-q:v ${quality ? Math.floor(100 / quality * 3) : 2}`]).toFormat("image2").pipe(res);
+    } else {
+      res.setHeader("Content-Type", "video/mp4");
+      if (start) command = command.setStartTime(String(start));
+      if (end) {
+        const getSec = (t: string) => t.split(':').reverse().reduce((acc, val, i) => acc + (Number(val) * Math.pow(60, i)), 0);
+        const duration = getSec(String(end)) - getSec(String(start || '0'));
+        if (duration > 0) command = command.setDuration(duration);
+      }
+
+      // If quality compress is requested
+      if (quality && Number(quality) < 100) {
+        const crf = Math.floor(18 + ((100 - Number(quality)) / 100) * 33);
+        command = command.outputOptions(['-c:v libx264', `-crf ${crf}`, '-preset ultrafast']);
+      } else {
+        command = command.outputOptions(['-c copy']);
+      }
+      command.outputOptions(['-movflags', 'frag_keyframe+empty_moov']).toFormat("mp4").pipe(res);
+    }
+  });
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
