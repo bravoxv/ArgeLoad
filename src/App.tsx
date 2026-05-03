@@ -38,6 +38,7 @@ export default function App() {
   const [info, setInfo] = useState<VideoInfo | null>(null);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [clicks, setClicks] = useState(0);
 
   useEffect(() => {
     let interval: any;
@@ -143,12 +144,15 @@ export default function App() {
       <main className="max-w-md mx-auto py-8">
 
         <header className="flex flex-col items-center text-center space-y-4 mb-8">
-          <div className="p-4 bg-indigo-500/10 rounded-3xl border border-indigo-500/20 shadow-inner">
-            <Download className="w-12 h-12 text-indigo-400" />
+          <div className="p-2 bg-neutral-900 rounded-3xl border border-sky-500/20 shadow-inner overflow-hidden flex items-center justify-center">
+            <img src="/logo_bxv.png" alt="BXV Logo" className="w-16 h-16 object-cover rounded-2xl" />
           </div>
           <div>
-            <h1 className="text-4xl font-black tracking-tighter text-white">OmniDown</h1>
-            <p className="text-neutral-500 text-xs font-bold uppercase tracking-widest mt-1">Mobile Downloader</p>
+            <h1 onClick={() => setClicks(c => c + 1)} className="text-4xl font-black tracking-tighter text-white select-none relative cursor-pointer">
+              ArgeDownload
+              {clicks >= 3 && <span className="absolute -top-4 -right-10 text-3xl animate-bounce">🇦🇷</span>}
+            </h1>
+            <p className="text-neutral-500 text-xs font-bold uppercase tracking-widest mt-1">Descargador Nacional</p>
           </div>
         </header>
 
@@ -171,7 +175,7 @@ export default function App() {
             id="analyze-btn"
             type="submit"
             disabled={loading}
-            className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-black rounded-3xl transition-all shadow-xl shadow-indigo-600/20 active:scale-[0.98]"
+            className="w-full py-5 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-black rounded-3xl transition-all shadow-xl shadow-sky-600/20 active:scale-[0.98]"
           >
             {loading ? <Loader2 className="animate-spin mx-auto w-6 h-6" /> : "ANALIZAR CONTENIDO"}
           </button>
