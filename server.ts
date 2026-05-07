@@ -40,258 +40,167 @@ async function startServer() {
   app.use(express.json());
 
 
+  // Pre-import scrapers for faster access
+  // @ts-ignore
+  const playPromise = import('play-dl');
+  // @ts-ignore
+  const ruhendPromise = import('ruhend-scraper');
+  const btchPromise = import('btch-downloader');
+
   // API Route to fetch video info
   app.post("/api/info", async (req, res) => {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: "URL is required" });
+
+    const cleanUrl = url.trim();
+    console.log(`ArgeLoad Analyzing: ${cleanUrl}`);
+
     try {
-      const { url } = req.body;
+      const urlObj = new URL(cleanUrl);
+      const hostname = urlObj.hostname.toLowerCase();
+      const domain = hostname.replace('www.', '');
 
-      if (!url) {
-        return res.status(400).json({ error: "URL is required" });
-      }
-
-      console.log(`Extracting: ${url}`);
-
-      // If Pinterest, Kick, or Twitch, use yt-dlp explicitly
-      if (url.includes('pinterest.com') || url.includes('kick.com') || url.includes('twitch.tv')) {
+      // 1. YouTube (play-dl is very fast)
+      if (domain.includes('youtube.com') || domain.includes('youtu.be')) {
         try {
-          const info = await ytdl(url, {
-            dumpSingleJson: true,
-            noCheckCertificates: true,
-            noWarnings: true,
-            preferFreeFormats: true,
-            geoBypass: true,
-            addHeader: [
-              'referer:https://kick.com/',
-              'origin:https://kick.com/',
-              'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-              'accept-language: es-ES,es;q=0.9,en;q=0.8',
-              'accept: application/json, text/plain, */*'
-            ]
-          });
+          const play = await playPromise;
+          const info: any = await play.video_info(cleanUrl);
+          const formats = info.format.filter((f: any) => f.hasVideo && f.hasAudio).map((f: any) => ({
+            itag: f.itag,
+            mimeType: f.mime_type || f.mimeType || 'video/mp4',
+            qualityLabel: f.qualityLabel || '720p',
+            hasVideo: true,
+            hasAudio: true,
+            container: 'mp4',
+            url: f.url,
+            contentLength: f.contentLength
+          }));
 
-          const platformMap = {
-            'tiktok.com': 'tiktok',
-            'instagram.com': 'instagram',
-            'pinterest.com': 'pinterest',
-            'kick.com': 'kick',
-            'twitch.tv': 'twitch'
-          };
-
-          const platform = Object.keys(platformMap).find(key => url.includes(key)) || 'unknown';
-
-          const platformName = platformMap[platform as keyof typeof platformMap] || 'unknown';
-
-          let finalFormats = [];
-          if (info.formats && info.formats.length > 0) {
-            finalFormats = info.formats.map((f: any) => ({
-              itag: 137,
-              mimeType: f.ext ? `video/${f.ext}` : 'video/mp4',
-              qualityLabel: f.format_note || 'Original',
-              hasVideo: true,
-              hasAudio: true,
-              container: f.ext || 'mp4',
-              url: f.url || info.url
-            }));
-          } else if (platformName === 'pinterest' && info.thumbnail) {
-            finalFormats = [{
-              itag: 137,
-              mimeType: 'image/jpeg',
-              qualityLabel: 'Original',
-              hasVideo: false,
-              hasAudio: false,
-              container: 'jpg',
-              url: info.thumbnail
-            }];
-          } else {
-            finalFormats = [{
-              itag: 137,
-              mimeType: 'video/mp4',
-              qualityLabel: 'Original',
-              hasVideo: true,
-              hasAudio: true,
-              container: 'mp4',
-              url: info.url
-            }];
+          const audio = info.format.filter((f: any) => !f.hasVideo && f.hasAudio).sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+          if (audio) {
+            formats.push({
+              itag: 140, mimeType: 'audio/mp4', qualityLabel: 'Audio Alta Calidad',
+              hasVideo: false, hasAudio: true, container: 'mp3',
+              url: audio.url, contentLength: audio.contentLength
+            });
           }
 
-          const result = {
-            title: info.title,
-            author: info.uploader || "Desconocido",
-            thumbnail: info.thumbnail,
-            platform: platformName,
-            formats: finalFormats
-          };
-          return res.json(result);
-        } catch (e: any) {
-          console.error("yt-dlp error:", e);
-          return res.status(400).json({ error: "No se pudo extraer el enlace: " + e.message });
-        }
+          return res.json({
+            title: info.video_details.title,
+            author: info.video_details.channel?.name || "YouTube User",
+            thumbnail: info.video_details.thumbnails.pop()?.url || "",
+            platform: 'youtube',
+            formats
+          });
+        } catch (e) { console.error("YT Fast error", e); }
       }
 
-      // Existing logic for other platforms
-      let info: any = null;
-      let platform = 'unknown';
-      let formats: any[] = [];
-      let baseData = { title: "Media content", author: "Unknown", thumbnail: "", duration: "Unknown" };
+      // 2. Ruhend / BTCH for Social Media (Fast Scrapers)
+      const ruhend = await ruhendPromise;
 
-      // direct link detection before platform specific parsing
-      const isDirectMedia = url.match(/\.(mp4|webm|mp3|m4a|wav|jpg|jpeg|png|gif|webp|mov|mkv)(\?|$)/i) ||
-        url.includes('video.twimg.com') ||
-        url.includes('pbs.twimg.com/media') ||
-        url.match(/format=(jpg|jpeg|png|gif|webp|mp4)/i) ||
-        url.includes('instagram.com/v/');
-
-      if (isDirectMedia && !url.includes('/status/') && !url.includes('/p/') && !url.includes('/reel/')) {
-        platform = 'direct';
-        const urlObj = new URL(url);
-        let extMatch = urlObj.pathname.match(/\.(mp4|webm|mp3|m4a|wav|jpg|jpeg|png|gif|webp|mov|mkv)$/i)
-          || url.match(/format=(jpg|jpeg|png|gif|webp|mp4)/i);
-        let ext = extMatch ? extMatch[1].toLowerCase() : 'unknown';
-
-        let isVideo = ['mp4', 'webm', 'mov', 'mkv'].includes(ext);
-        let isAudio = ['mp3', 'm4a', 'wav'].includes(ext);
-        let isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
-
-        // guess extension if not found in pathname
-        if (ext === 'unknown') {
-          if (url.includes('video.twimg.com')) { isVideo = true; ext = 'mp4'; }
-          else if (url.includes('pbs.twimg.com')) { isImage = true; ext = 'jpg'; }
-          else isVideo = true; // default guess or do a HEAD request
-        }
-
-        let originalFilename = urlObj.pathname.split('/').pop() || "Direct_Media";
-        // if no extension in filename but we know the ext, append it so the title naturally has it 
-        if (!originalFilename.includes('.') && ext !== 'unknown') {
-          originalFilename += `.${ext}`;
-        }
-
-        info = { status: true, title: originalFilename };
-        baseData.title = originalFilename;
-
-        if (isImage) {
-          formats.push({ itag: 1000, mimeType: `image/${ext === 'jpg' ? 'jpeg' : ext}`, qualityLabel: 'Original', hasVideo: false, hasAudio: false, container: ext, url: url });
-        } else if (isAudio) {
-          formats.push({ itag: 140, mimeType: `audio/${ext}`, qualityLabel: 'Audio', hasVideo: false, hasAudio: true, container: ext, url: url });
-        } else {
-          formats.push({ itag: 137, mimeType: `video/${ext}`, qualityLabel: 'Video', hasVideo: true, hasAudio: true, container: ext, url: url });
-        }
+      // TikTok
+      if (domain.includes('tiktok.com')) {
+        try {
+          const tt = await ruhend.ttdl(cleanUrl);
+          if (tt?.video) {
+            return res.json({
+              title: tt.title || "TikTok Video",
+              author: tt.author || "TikTok User",
+              thumbnail: tt.cover || "",
+              platform: 'tiktok',
+              formats: [
+                { itag: 137, mimeType: 'video/mp4', qualityLabel: 'HD No Watermark', hasVideo: true, hasAudio: true, container: 'mp4', url: tt.video },
+                { itag: 140, mimeType: 'audio/mpeg', qualityLabel: 'Audio Original', hasVideo: false, hasAudio: true, container: 'mp3', url: tt.music }
+              ].filter(f => f.url)
+            });
+          }
+        } catch (e) { }
       }
-      else if (url.includes('youtube.com') || url.includes('youtu.be')) {
-        platform = 'youtube';
-        const yt = await import('btch-downloader').then(m => m.youtube(url)).catch(() => null);
-        if (yt && yt.status) {
-          info = yt;
-          baseData.title = yt.title || "Video de YouTube";
-          baseData.author = yt.author || "Desconocido";
-          baseData.thumbnail = yt.thumbnail || "";
 
-          if (yt.mp4) formats.push({ itag: 137, mimeType: 'video/mp4', qualityLabel: '1080p', bitrate: 5000000, hasVideo: true, hasAudio: true, container: 'mp4', url: yt.mp4 });
-          if (yt.mp3) formats.push({ itag: 140, mimeType: 'audio/mpeg', qualityLabel: 'Solo Audio', audioBitrate: 128, hasVideo: false, hasAudio: true, container: 'mp3', url: yt.mp3 });
-        }
-      } else if (url.includes('instagram.com')) {
-        platform = 'instagram';
-        const ig = await import('btch-downloader').then(m => m.igdl(url)).catch(() => null);
-        if (ig && ig.status && ig.result && ig.result.length > 0) {
-          info = ig;
-          baseData.title = "Post/Reel de Instagram";
-          baseData.thumbnail = ig.result[0].thumbnail || ig.result[0].url || "";
-          ig.result.forEach((res: any, idx: number) => {
-            if (res.url) {
-              const isImg = res.url.includes('.jpg') || res.url.includes('.webp') || res.url.includes('n.jpg') || res.url.includes('n.webp') || !res.url.includes('.mp4');
-              formats.push({
+      // Instagram
+      if (domain.includes('instagram.com')) {
+        try {
+          const ig = await ruhend.igdl(cleanUrl);
+          if (ig?.data?.length > 0) {
+            const formats = ig.data.map((item: any, idx: number) => {
+              const isVideo = item.url.includes('.mp4') || !item.url.includes('.jpg');
+              return {
                 itag: 137 + idx,
-                mimeType: isImg ? 'image/jpeg' : 'video/mp4',
-                qualityLabel: isImg ? `Imagen ${idx + 1}` : `Video ${idx + 1}`,
-                hasVideo: !isImg,
-                hasAudio: !isImg,
-                container: isImg ? 'jpg' : 'mp4',
-                url: res.url
-              });
-            }
-          });
-        }
-      } else if (url.includes('tiktok.com')) {
-        platform = 'tiktok';
-        const tt = await import('btch-downloader').then(m => m.ttdl(url)).catch(() => null);
-        if (tt && tt.status) {
-          info = tt;
-          baseData.title = tt.title || "Video/Fotos de TikTok";
-          baseData.thumbnail = tt.thumbnail || "";
-
-          if (tt.images && tt.images.length > 0) {
-            tt.images.forEach((imgUrl: string, idx: number) => {
-              formats.push({ itag: 1000 + idx, mimeType: 'image/jpeg', qualityLabel: `Foto ${idx + 1}`, hasVideo: false, hasAudio: false, container: 'jpg', url: imgUrl });
+                mimeType: isVideo ? 'video/mp4' : 'image/jpeg',
+                qualityLabel: isVideo ? `Video ${idx + 1}` : `Imagen ${idx + 1}`,
+                hasVideo: isVideo, hasAudio: isVideo, container: isVideo ? 'mp4' : 'jpg', url: item.url
+              };
             });
+            return res.json({ title: "Instagram Post/Reel", author: "Instagram User", thumbnail: ig.data[0].url, platform: 'instagram', formats });
           }
-
-          if (tt.video && tt.video.length > 0) {
-            tt.video.forEach((v: string) => {
-              formats.push({ itag: 137, mimeType: 'video/mp4', qualityLabel: 'HD', bitrate: 3000000, hasVideo: true, hasAudio: true, container: 'mp4', url: v });
-            });
-          }
-          if (tt.audio && tt.audio.length > 0) {
-            tt.audio.forEach((a: string) => {
-              formats.push({ itag: 140, mimeType: 'audio/mpeg', qualityLabel: 'Solo Audio', audioBitrate: 128, hasVideo: false, hasAudio: true, container: 'mp3', url: a });
-            });
-          }
-        }
-      } else if (url.includes('twitter.com') || url.includes('x.com')) {
-        platform = 'twitter';
-        const tw = await import('btch-downloader').then(m => m.twitter(url)).catch(() => null);
-        if (tw && tw.status && tw.url && tw.url.length > 0) {
-          info = tw;
-          baseData.title = tw.title || "Video de Twitter/X";
-          baseData.thumbnail = tw.thumbnail || "";
-          tw.url.forEach((u: any) => {
-            formats.push({ itag: 137, mimeType: 'video/mp4', qualityLabel: 'HD', bitrate: 2000000, hasVideo: true, hasAudio: true, container: 'mp4', url: u.hd || u.sd || u.url });
-          });
-        }
-      } else if (url.includes('facebook.com') || url.includes('fb.watch')) {
-        platform = 'facebook';
-        const fb = await import('btch-downloader').then(m => m.fbdown(url)).catch(() => null);
-        if (fb && fb.status) {
-          info = fb;
-          baseData.title = "Video de Facebook";
-          if (fb.HD) formats.push({ itag: 137, mimeType: 'video/mp4', qualityLabel: 'HD', bitrate: 3000000, hasVideo: true, hasAudio: true, container: 'mp4', url: fb.HD });
-          if (fb.Normal_video) formats.push({ itag: 136, mimeType: 'video/mp4', qualityLabel: 'SD', bitrate: 1000000, hasVideo: true, hasAudio: true, container: 'mp4', url: fb.Normal_video });
-        }
+        } catch (e) { }
       }
 
-      if (!info || formats.length === 0) {
-        return res.status(400).json({ error: "No se pudo extraer el enlace. Puede que la plataforma estÃ© bloqueando o que sea una red no soportada aÃºn." });
-      }
-
-      // Fetch actual file sizes
-      const fetchSize = async (url: string) => {
+      // Facebook
+      if (domain.includes('facebook.com') || domain.includes('fb.watch')) {
         try {
-          const headRes = await fetch(url, { method: 'HEAD' });
-          const len = headRes.headers.get('content-length');
-          if (len) return parseInt(len, 10);
-        } catch (e) {
-          // Ignore
-        }
-        return undefined;
-      };
+          const fb = await ruhend.fbdl(cleanUrl);
+          if (fb?.hd || fb?.sd) {
+            const formats = [];
+            if (fb.hd) formats.push({ itag: 137, mimeType: 'video/mp4', qualityLabel: 'HD Quality', hasVideo: true, hasAudio: true, container: 'mp4', url: fb.hd });
+            if (fb.sd) formats.push({ itag: 136, mimeType: 'video/mp4', qualityLabel: 'SD Quality', hasVideo: true, hasAudio: true, container: 'mp4', url: fb.sd });
+            return res.json({ title: "Facebook Video", author: "Facebook User", thumbnail: "", platform: 'facebook', formats });
+          }
+        } catch (e) { }
+      }
 
-      const validFormats = formats.filter(f => f.url);
-      for (const format of validFormats) {
-        const size = await fetchSize(format.url);
-        if (size) {
-          format.contentLength = size;
+      // 3. Twitter, Pinterest, Threads (Using BTCH as it's faster than yt-dlp)
+      const btch = await btchPromise;
+      if (domain.includes('twitter.com') || domain.includes('x.com')) {
+        const tw = await btch.twitter(cleanUrl).catch(() => null);
+        if (tw?.url?.length > 0) {
+          return res.json({
+            title: tw.title || "Twitter Video", thumbnail: tw.thumbnail || "", platform: 'twitter',
+            formats: tw.url.map((u: any) => ({ itag: 137, mimeType: 'video/mp4', qualityLabel: 'HD', hasVideo: true, hasAudio: true, container: 'mp4', url: u.hd || u.sd || u.url }))
+          });
         }
       }
 
-      const result = {
-        ...baseData,
-        platform: platform,
-        formats: validFormats,
-      };
+      if (domain.includes('threads.net')) {
+        const thr = await btch.threads(cleanUrl).catch(() => null);
+        if (thr?.result?.length > 0) {
+          return res.json({
+            title: "Threads Media", thumbnail: thr.result[0].url, platform: 'threads',
+            formats: thr.result.map((r: any, idx: number) => {
+              const isVideo = r.url.includes('.mp4');
+              return { itag: 137 + idx, mimeType: isVideo ? 'video/mp4' : 'image/jpeg', qualityLabel: isVideo ? 'Video' : 'Imagen', hasVideo: isVideo, hasAudio: isVideo, container: isVideo ? 'mp4' : 'jpg', url: r.url };
+            })
+          });
+        }
+      }
 
-      return res.json(result);
+      // 4. Fallback to yt-dlp only if others fail or for specialized sites
+      if (domain.includes('kick.com') || domain.includes('twitch.tv') || domain.includes('pinterest.com')) {
+        const info: any = await ytdl(cleanUrl, { dumpSingleJson: true, noCheckCertificates: true, noWarnings: true, preferFreeFormats: true });
+        if (info?.formats) {
+          const formats = info.formats.filter((f: any) => f.url && (f.vcodec !== 'none' || f.acodec !== 'none')).map((f: any) => ({
+            itag: 137, mimeType: f.ext ? `video/${f.ext}` : 'video/mp4', qualityLabel: f.format_note || f.resolution || 'Original',
+            hasVideo: f.vcodec !== 'none', hasAudio: f.acodec !== 'none', container: f.ext || 'mp4', url: f.url
+          }));
+          return res.json({ title: info.title || "Extracted", author: info.uploader || "Unknown", thumbnail: info.thumbnail || "", platform: domain.split('.')[0], formats });
+        }
+      }
+
+      // 5. Direct Link Detection
+      if (cleanUrl.match(/\.(mp4|webm|mp3|m4a|wav|jpg|jpeg|png|gif|webp|mov|mkv)(\?|$)/i)) {
+        const ext = cleanUrl.match(/\.(mp4|webm|mp3|m4a|wav|jpg|jpeg|png|gif|webp|mov|mkv)/i)?.[1].toLowerCase() || 'mp4';
+        const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+        return res.json({
+          title: urlObj.pathname.split('/').pop() || "Direct File", author: "Direct Link", thumbnail: isImg ? cleanUrl : "", platform: 'direct',
+          formats: [{ itag: 1000, mimeType: isImg ? `image/${ext}` : (['mp3', 'm4a'].includes(ext) ? 'audio/mpeg' : 'video/mp4'), qualityLabel: 'Direct Link', hasVideo: !isImg && !['mp3', 'm4a'].includes(ext), hasAudio: !isImg, container: ext, url: cleanUrl }]
+        });
+      }
+
+      return res.status(400).json({ error: "Plataforma no soportada o enlace no vÃ¡lido para anÃ¡lisis rÃ¡pido." });
 
     } catch (error: any) {
       console.error(error);
-      res.status(500).json({ error: "Failed to fetch video information. " + error.message });
+      res.status(500).json({ error: "Error de anÃ¡lisis: " + error.message });
     }
   });
 
