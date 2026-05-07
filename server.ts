@@ -125,12 +125,30 @@ async function startServer() {
             const uniqueFormatsMap = new Map();
 
             ig.data.forEach((item: any) => {
-              const urlParts = item.url.split('?')[0].split('/');
-              const filename = urlParts[urlParts.length - 1];
-              // Universal ID for Instagram media - usually the part before the first underscore
-              const fileBaseId = filename.split('_')[0] || filename;
+              let fileBaseId = item.url;
+              // Check if URL or filename explicitly reveals it's an MP4
+              let isVideo = item.url.includes('.mp4') || (item.filename && item.filename.includes('.mp4'));
 
-              const isVideo = item.url.includes('.mp4') || item.url.includes('.mov') || item.url.includes('.m4v');
+              try {
+                if (item.filename) {
+                  fileBaseId = item.filename.split('_')[1] || item.filename;
+                } else if (item.url.includes('token=')) {
+                  const jwt = item.url.split('token=')[1].split('&')[0];
+                  const payload = JSON.parse(Buffer.from(jwt.split('.')[1], 'base64').toString());
+                  if (payload.filename) {
+                    fileBaseId = payload.filename.split('_')[1] || payload.filename;
+                    isVideo = isVideo || payload.filename.includes('.mp4');
+                  } else if (payload.url) {
+                    fileBaseId = payload.url.split('?')[0].split('/').pop();
+                    isVideo = isVideo || payload.url.includes('.mp4');
+                  }
+                } else {
+                  const urlParts = item.url.split('?')[0].split('/');
+                  const filename = urlParts[urlParts.length - 1];
+                  fileBaseId = filename.split('_')[0] || filename;
+                  isVideo = isVideo || filename.includes('.mp4');
+                }
+              } catch (e) { }
 
               // Priority: If we don't have this ID, or if we have it as a video but found an image version
               if (!uniqueFormatsMap.has(fileBaseId) || (uniqueFormatsMap.get(fileBaseId).hasVideo && !isVideo)) {
@@ -350,7 +368,9 @@ async function startServer() {
   app.post("/api/studio", upload.single("file"), (req, res) => {
     if (!req.file) return res.status(400).send("No file uploaded");
     const { start, end, quality } = req.body;
-    const isImage = req.file.mimetype.startsWith("image/");
+    // Fallback detection using original file name in case mobile sets incorrect generic mimetype
+    const isImageTest = req.file.mimetype.startsWith("image/") || !!(req.file.originalname && req.file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/i));
+    const isImage = isImageTest && !req.file.mimetype.startsWith("video/");
     const ext = isImage ? 'jpg' : 'mp4';
     const outputFilename = `out_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
     const outputPath = path.join(__dirname, 'uploads', outputFilename);

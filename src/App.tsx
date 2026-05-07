@@ -93,6 +93,14 @@ export default function App() {
   // Removed automatic clipboard check on focus to prevent security blocks and annoying prompts
   // Now we rely on the manual paste button and manual input which trigger handleAnalyze correctly
 
+  const resolveImageUrl = (url: string | undefined): string => {
+    if (!url) return '/placeholder.png';
+    if (url.startsWith('/api/proxy-image')) return `${API_BASE_URL}${url}`;
+    if (url.includes('instagram.com') || url.includes('fbcdn.net')) return `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(url)}`;
+    if (url.startsWith('http')) return url;
+    return `${API_BASE_URL}${url}`;
+  };
+
   const formatBytes = (bytes: string | number | undefined) => {
     let b = typeof bytes === 'string' ? parseInt(bytes, 10) : Number(bytes);
     if (isNaN(b) || b === 0) return "Desconocido";
@@ -282,7 +290,7 @@ export default function App() {
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-700">
                 <div className="rounded-[2.5rem] overflow-hidden border border-white/10 aspect-video relative shadow-2xl group">
                   <img
-                    src={(info as any).proxyThumbnail || (info.thumbnail.includes('instagram.com') || info.thumbnail.includes('fbcdn.net') ? `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(info.thumbnail)}` : (info.thumbnail.startsWith('http') ? info.thumbnail : `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(info.thumbnail)}`))}
+                    src={resolveImageUrl((info as any).proxyThumbnail || info.thumbnail)}
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent flex flex-col justify-end p-6">
@@ -331,12 +339,24 @@ export default function App() {
                       <div className="mt-5">
                         <div className="flex justify-between items-center px-2 mb-3">
                           <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] text-sky-400">ColecciÃ³n ({uniqueImageFormats.length})</h3>
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`¿Quieres descargar las ${uniqueImageFormats.length} imágenes de la colección?`)) {
+                                uniqueImageFormats.forEach((f, idx) => {
+                                  setTimeout(() => handleDownload(f, false), idx * 800); // Staggered to avoid browser blocks
+                                });
+                              }
+                            }}
+                            className="bg-sky-600/20 hover:bg-sky-600 text-sky-400 hover:text-white px-3 py-1 rounded-lg text-[9px] font-black transition-all"
+                          >
+                            DESCARGAR TODO
+                          </button>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           {uniqueImageFormats.map((f, i) => (
                             <button key={`img-${i}`} onClick={() => handleDownload(f, false)} className="w-full aspect-square bg-sky-900/10 border border-sky-500/20 rounded-[1.5rem] active:scale-95 transition-all hover:bg-sky-900/40 relative overflow-hidden group">
                               <img
-                                src={(f as any).proxyUrl || (f.url.includes('instagram.com') || f.url.includes('fbcdn.net') ? `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(f.url)}` : (f.url.startsWith('http') ? f.url : `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(f.url)}`))}
+                                src={resolveImageUrl((f as any).proxyUrl || f.url)}
                                 className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform"
                                 loading="lazy"
                               />
