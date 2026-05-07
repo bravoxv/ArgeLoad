@@ -362,17 +362,84 @@ async function startServer() {
         }
       }
 
-      // 5. Direct Link Detection
-      if (cleanUrl.match(/\.(mp4|webm|mp3|m4a|wav|jpg|jpeg|png|gif|webp|mov|mkv)(\?|$)/i)) {
-        const ext = cleanUrl.match(/\.(mp4|webm|mp3|m4a|wav|jpg|jpeg|png|gif|webp|mov|mkv)/i)?.[1].toLowerCase() || 'mp4';
+      // 5. Direct Link Detection (Extension based)
+      const directMatch = cleanUrl.match(/\.(mp4|webm|mp3|m4a|wav|jpg|jpeg|png|gif|webp|mov|mkv)(\?|$)/i);
+      if (directMatch) {
+        const ext = directMatch[1].toLowerCase();
         const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+        const isAud = ['mp3', 'm4a', 'wav'].includes(ext);
+        const title = urlObj.pathname.split('/').pop()?.split('?')[0] || "Archivo Directo";
+
+        const proxyUrl = isImg ? `/api/proxy-image?url=${encodeURIComponent(cleanUrl)}` : undefined;
+
         return res.json({
-          title: urlObj.pathname.split('/').pop() || "Archivo Directo", author: "Enlace Directo", thumbnail: isImg ? cleanUrl : "", platform: 'direct',
-          formats: [{ itag: 1000, mimeType: isImg ? `image/${ext}` : (['mp3', 'm4a'].includes(ext) ? 'audio/mpeg' : 'video/mp4'), qualityLabel: 'Enlace Directo', hasVideo: !isImg && !['mp3', 'm4a'].includes(ext), hasAudio: !isImg, container: ext, url: cleanUrl }]
+          title,
+          author: "Enlace Directo",
+          thumbnail: proxyUrl || "",
+          platform: 'direct',
+          formats: [{
+            itag: 1000,
+            mimeType: isImg ? `image/${ext}` : (isAud ? 'audio/mpeg' : 'video/mp4'),
+            qualityLabel: 'Enlace Directo',
+            hasVideo: !isImg && !isAud,
+            hasAudio: !isImg,
+            container: ext,
+            url: cleanUrl,
+            proxyUrl: proxyUrl
+          }]
         });
       }
 
-      return res.status(400).json({ error: "Plataforma no soportada o enlace no vÃ¡lido para anÃ¡lisis rÃ¡pido." });
+      // 6. Generic Media Detection (Header based fallback)
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 6000); // 6s max for external detection
+
+        const headRes = await fetch(cleanUrl, {
+          method: 'HEAD',
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
+          signal: controller.signal
+        }).catch(() => null);
+
+        clearTimeout(timeout);
+
+        if (headRes && headRes.ok) {
+          const contentType = headRes.headers.get('content-type') || "";
+          if (contentType.startsWith('image/') || contentType.startsWith('video/') || contentType.startsWith('audio/')) {
+            const isImg = contentType.startsWith('image/');
+            const isVid = contentType.startsWith('video/');
+            const isAud = contentType.startsWith('audio/');
+
+            let ext = contentType.split('/')[1]?.split(';')[0] || (isImg ? 'jpg' : isVid ? 'mp4' : 'mp3');
+            if (ext === 'mpeg') ext = 'mp3';
+            if (ext === 'quicktime') ext = 'mov';
+            if (ext === 'x-matroska') ext = 'mkv';
+
+            const proxyUrl = isImg ? `/api/proxy-image?url=${encodeURIComponent(cleanUrl)}` : undefined;
+
+            return res.json({
+              title: urlObj.pathname.split('/').pop()?.split('?')[0] || "Archivo Externo",
+              author: "Enlace Externo",
+              thumbnail: proxyUrl || "",
+              platform: 'direct',
+              formats: [{
+                itag: 1000,
+                mimeType: contentType.split(';')[0],
+                qualityLabel: 'Enlace Externo',
+                hasVideo: isVid,
+                hasAudio: isVid || isAud,
+                container: ext,
+                url: cleanUrl,
+                proxyUrl: proxyUrl
+              }]
+            });
+          }
+        }
+      } catch (e) {
+        console.log("Generic detection skipped for:", cleanUrl);
+      }
+
+      return res.status(400).json({ error: "Plataforma no soportada. ArgeLoad intentó detectar medios pero no encontró imágenes, videos o audio directo." });
 
     } catch (error: any) {
       console.error(error);
