@@ -332,15 +332,33 @@ async function startServer() {
         } catch (e) { }
       }
 
-      // 4. Fallback to yt-dlp only if others fail or for specialized sites
+      // 4. Specialized fallback for Twitch and Kick using yt-dlp
       if (domain.includes('kick.com') || domain.includes('twitch.tv')) {
-        const info: any = await ytdl(cleanUrl, { dumpSingleJson: true, noCheckCertificates: true, noWarnings: true, preferFreeFormats: true });
-        if (info?.formats) {
-          const formats = info.formats.filter((f: any) => f.url && (f.vcodec !== 'none' || f.acodec !== 'none')).map((f: any) => ({
-            itag: 137, mimeType: f.ext ? `video/${f.ext}` : 'video/mp4', qualityLabel: f.format_note || f.resolution || 'Original',
-            hasVideo: f.vcodec !== 'none', hasAudio: f.acodec !== 'none', container: f.ext || 'mp4', url: f.url
-          }));
-          return res.json({ title: info.title || "Extraído", author: info.uploader || "Desconocido", thumbnail: info.thumbnail || "", platform: domain.split('.')[0], formats });
+        try {
+          const info: any = await ytdl(cleanUrl, { dumpSingleJson: true, noCheckCertificates: true, noWarnings: true, preferFreeFormats: true });
+          if (info && info.formats) {
+            const formats = info.formats
+              .filter((f: any) => f.url && (f.vcodec !== 'none' || f.acodec !== 'none'))
+              .map((f: any, idx: number) => ({
+                itag: 137 + idx,
+                mimeType: f.ext ? `video/${f.ext}` : 'video/mp4',
+                qualityLabel: f.format_note || f.resolution || `Calidad ${idx + 1}`,
+                hasVideo: f.vcodec !== 'none',
+                hasAudio: f.acodec !== 'none',
+                container: f.ext || 'mp4',
+                url: f.url
+              }));
+
+            return res.json({
+              title: info.title || (domain.includes('twitch') ? "Twitch Media" : "Kick Video"),
+              author: info.uploader || info.creator || "Creador",
+              thumbnail: info.thumbnail || "",
+              platform: domain.includes('twitch') ? 'twitch' : 'kick',
+              formats
+            });
+          }
+        } catch (e) {
+          console.error("Twitch/Kick Error:", e);
         }
       }
 
