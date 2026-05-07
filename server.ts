@@ -568,11 +568,13 @@ async function startServer() {
 
   app.post("/api/studio", upload.single("file"), (req, res) => {
     if (!req.file) return res.status(400).send("No se subió ningún archivo");
-    const { start, end, quality } = req.body;
-    // Fallback detection using original file name in case mobile sets incorrect generic mimetype
-    const isImageTest = req.file.mimetype.startsWith("image/") || !!(req.file.originalname && req.file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/i));
-    const isImage = isImageTest && !req.file.mimetype.startsWith("video/");
-    const ext = isImage ? 'jpg' : 'mp4';
+    const { quality } = req.body;
+
+    // Improved detection
+    const isImage = req.file.mimetype.startsWith("image/") || !!(req.file.originalname && req.file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/i));
+    const isAudio = !isImage && (req.file.mimetype.startsWith("audio/") || !!(req.file.originalname && req.file.originalname.match(/\.(mp3|wav|m4a)$/i)));
+
+    const ext = isImage ? 'jpg' : (isAudio ? 'mp3' : 'mp4');
     const outputFilename = `out_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
     const outputPath = path.join(__dirname, 'uploads', outputFilename);
 
@@ -580,7 +582,6 @@ async function startServer() {
       fs.unlink(req.file!.path, () => { });
       res.json({ success: true, downloadUrl: `/api/studio/download/${outputFilename}` });
 
-      // Clean up the file after 30 minutes to save space instead of doing it on download
       setTimeout(() => {
         if (fs.existsSync(outputPath)) {
           fs.unlink(outputPath, () => { });
@@ -593,15 +594,17 @@ async function startServer() {
     });
 
     if (isImage) {
-      command.outputOptions([`-q:v ${quality ? Math.floor(100 / quality * 3) : 2}`]).toFormat("image2").save(outputPath);
-    } else {
-      if (start) command = command.setStartTime(String(start));
-      if (end) {
-        const getSec = (t: string) => t.split(':').reverse().reduce((acc, val, i) => acc + (Number(val) * Math.pow(60, i)), 0);
-        const duration = getSec(String(end)) - getSec(String(start || '0'));
-        if (duration > 0) command = command.setDuration(duration);
+      // Image compression
+      command.outputOptions([`-q:v ${quality ? Math.floor(1 + ((100 - quality) / 100) * 30) : 2}`]).toFormat("image2").save(outputPath);
+    } else if (isAudio) {
+      // Audio compression
+      if (quality && Number(quality) < 100) {
+        const bitrate = Math.floor(32 + (Number(quality) / 100) * 224); // Scale 32k to 256k
+        command = command.outputOptions([`-b:a ${bitrate}k`]);
       }
-
+      command.toFormat("mp3").save(outputPath);
+    } else {
+      // Video compression
       if (quality && Number(quality) < 100) {
         const crf = Math.floor(18 + ((100 - Number(quality)) / 100) * 33);
         command = command.outputOptions(['-c:v libx264', `-crf ${crf}`, '-preset ultrafast']);

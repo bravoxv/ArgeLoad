@@ -1,4 +1,6 @@
-import { Download, Film, Music, Loader2, Video, Image as ImageIcon, Clipboard, X } from "lucide-react";
+import { Download, Film, Music, Loader2, Video, Image as ImageIcon, Clipboard as ClipboardIcon, X } from "lucide-react";
+import { Clipboard as CapacitorClipboard } from '@capacitor/clipboard';
+import { Capacitor } from '@capacitor/core';
 import React, { useState, useEffect } from "react";
 
 // CONFIGURACIÓN PARA ANDROID:
@@ -43,8 +45,6 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<VideoInfo | null>(null);
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
   const [clicks, setClicks] = useState(0);
   const [tab, setTab] = useState<'web' | 'local' | 'history'>('web');
   const [localFile, setLocalFile] = useState<File | null>(null);
@@ -135,8 +135,15 @@ export default function App() {
 
   const handlePaste = async () => {
     try {
-      const text = await navigator.clipboard.readText();
-      const cleanText = text.trim();
+      let text = "";
+      if (Capacitor.isNativePlatform()) {
+        const result = await CapacitorClipboard.read();
+        text = result.value;
+      } else {
+        text = await navigator.clipboard.readText();
+      }
+
+      const cleanText = text?.trim() || "";
       if (cleanText) {
         setUrl(cleanText);
         // If it looks like a URL, trigger analysis immediately after state update
@@ -186,8 +193,6 @@ export default function App() {
       const formData = new FormData();
       formData.append('file', localFile);
       formData.append('quality', String(quality));
-      if (startTime) formData.append('start', startTime);
-      if (endTime) formData.append('end', endTime);
 
       const response = await fetch(`${API_BASE_URL}/api/studio`, {
         method: 'POST',
@@ -272,7 +277,7 @@ export default function App() {
                 />
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
                   {url && <button type="button" onClick={() => setUrl("")} className="p-2 text-neutral-500 hover:text-white"><X size={22} /></button>}
-                  <button type="button" onClick={handlePaste} className="p-2 text-indigo-400 active:scale-90 transition-transform"><Clipboard size={22} /></button>
+                  <button type="button" onClick={handlePaste} className="p-2 text-indigo-400 active:scale-90 transition-transform"><ClipboardIcon size={22} /></button>
                 </div>
               </div>
               <button
@@ -395,13 +400,6 @@ export default function App() {
                 <p className="text-[9px] text-neutral-600 text-center font-bold mt-1">Bajar calidad reducirá increíblemente el tamaño del archivo.</p>
               </div>
 
-              <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
-                <h3 className="text-[11px] font-black text-neutral-500 uppercase tracking-[0.2em] mb-3">3. Recortar Video (Opcional)</h3>
-                <div className="flex gap-2">
-                  <input type="text" placeholder="Inicio (Ej: 0:10)" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-1/2 bg-black/50 p-4 rounded-xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all font-medium" />
-                  <input type="text" placeholder="Fin (Ej: 1:05)" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-1/2 bg-black/50 p-4 rounded-xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all font-medium" />
-                </div>
-              </div>
 
               <button
                 type="submit"
