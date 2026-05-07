@@ -63,78 +63,33 @@ async function startServer() {
       // 1. YouTube (play-dl is very fast)
       if (domain.includes('youtube.com') || domain.includes('youtu.be')) {
         try {
-          // Normalize Shorts URL
-          let ytUrl = cleanUrl;
-          if (ytUrl.includes('/shorts/')) {
-            ytUrl = ytUrl.replace('/shorts/', '/watch?v=');
-          }
-
-          // Check if it's a Community Post
-          if (ytUrl.includes('/post/')) {
-            try {
-              const info: any = await ytdl(ytUrl, { dumpSingleJson: true, noCheckCertificates: true, noWarnings: true });
-              if (info?.thumbnails) {
-                const formats = info.thumbnails.map((t: any, i: number) => ({
-                  itag: 200 + i, mimeType: 'image/jpeg', qualityLabel: `Imagen ${i + 1}`,
-                  hasVideo: false, hasAudio: false, container: 'jpg', url: t.url
-                }));
-                return res.json({ title: info.title || "Publicación de YouTube", author: info.uploader || "YouTube", thumbnail: info.thumbnails[0].url, platform: 'youtube', formats });
-              }
-            } catch (e) { }
-          }
-
-          const play = await playPromise;
-          const info: any = await play.video_info(ytUrl);
-
-          // Get all available formats
-          const formats = info.format.map((f: any, idx: number) => {
-            const hasV = f.hasVideo || f.vcodec !== 'none';
-            const hasA = f.hasAudio || f.acodec !== 'none';
-            const isVideo = hasV && hasA;
-            const isOnlyAudio = !hasV && hasA;
-
-            if (isVideo) {
-              return {
-                itag: f.itag || 137 + idx,
-                mimeType: f.mime_type || 'video/mp4',
-                qualityLabel: f.qualityLabel || f.resolution || 'HD',
-                hasVideo: true, hasAudio: true, container: 'mp4',
-                url: f.url, contentLength: f.contentLength
-              };
+          const btch = await btchPromise;
+          const yt: any = await btch.youtube(cleanUrl);
+          if (yt && (yt.mp4 || yt.mp3)) {
+            const formats = [];
+            if (yt.mp4) {
+              formats.push({
+                itag: 137, mimeType: 'video/mp4', qualityLabel: 'Video HD',
+                hasVideo: true, hasAudio: true, container: 'mp4', url: yt.mp4
+              });
             }
-            return null;
-          }).filter(Boolean);
+            if (yt.mp3) {
+              formats.push({
+                itag: 140, mimeType: 'audio/mpeg', qualityLabel: 'Audio MP3',
+                hasVideo: false, hasAudio: true, container: 'mp3', url: yt.mp3
+              });
+            }
 
-          // Get highest quality audio
-          const bestAudio = info.format.filter((f: any) => !f.hasVideo && f.hasAudio).sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0))[0];
-          if (bestAudio) {
-            formats.push({
-              itag: 140, mimeType: 'audio/mp4', qualityLabel: 'Audio Alta Calidad',
-              hasVideo: false, hasAudio: true, container: 'mp3',
-              url: bestAudio.url, contentLength: bestAudio.contentLength
+            return res.json({
+              title: yt.title || "Video de YouTube",
+              author: yt.author || "YouTube",
+              thumbnail: yt.thumbnail || "",
+              platform: 'youtube',
+              formats
             });
           }
-
-          return res.json({
-            title: info.video_details.title,
-            author: info.video_details.channel?.name || "Usuario de YouTube",
-            thumbnail: info.video_details.thumbnails.pop()?.url || "",
-            platform: 'youtube',
-            formats
-          });
         } catch (e) {
-          console.error("YT Fast error", e);
-          // Final fallback to yt-dlp if play-dl fails
-          try {
-            const info: any = await ytdl(cleanUrl, { dumpSingleJson: true, noCheckCertificates: true });
-            if (info?.formats) {
-              const formats = info.formats.filter((f: any) => f.url && (f.vcodec !== 'none' && f.acodec !== 'none')).map((f: any) => ({
-                itag: 137, mimeType: 'video/mp4', qualityLabel: f.format_note || f.resolution || 'Original',
-                hasVideo: true, hasAudio: true, container: 'mp4', url: f.url
-              }));
-              return res.json({ title: info.title || "YouTube", author: info.uploader || "YouTube", thumbnail: info.thumbnail || "", platform: 'youtube', formats });
-            }
-          } catch (e2) { }
+          console.error("YT BTCH error", e);
         }
       }
 

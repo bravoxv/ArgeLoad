@@ -1,12 +1,13 @@
 import btch from "btch-downloader";
-import ruhend from "ruhend-scraper";
-import fs from "fs";
 
 async function main() {
-    const cleanUrl = 'https://www.youtube.com/post/UgkxWq5_6V3Y8J-9Y5z5z5z5z5z5z5z5z5z'; // Example
+    const cleanUrl = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
     try {
-        console.log("Testing YouTube Post...");
-        // Usually these scrapers don't have direct youtube post support, but let's check
-    } catch (e) { }
+        console.log("Testing BTCH YouTube...");
+        const yt = await btch.youtube(cleanUrl);
+        console.log(JSON.stringify(yt, null, 2));
+    } catch (e) {
+        console.error("BTCH fail");
+    }
 }
 main();
