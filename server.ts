@@ -122,16 +122,42 @@ async function startServer() {
         try {
           const ig = await ruhend.igdl(cleanUrl);
           if (ig?.data?.length > 0) {
-            const formats = ig.data.map((item: any, idx: number) => {
-              const isVideo = item.url.includes('.mp4') || !item.url.includes('.jpg');
-              return {
-                itag: 137 + idx,
-                mimeType: isVideo ? 'video/mp4' : 'image/jpeg',
-                qualityLabel: isVideo ? `Video ${idx + 1}` : `Imagen ${idx + 1}`,
-                hasVideo: isVideo, hasAudio: isVideo, container: isVideo ? 'mp4' : 'jpg', url: item.url
-              };
+            const uniqueFormatsMap = new Map();
+
+            ig.data.forEach((item: any) => {
+              const urlParts = item.url.split('?')[0].split('/');
+              const filename = urlParts[urlParts.length - 1];
+              // Universal ID for Instagram media - usually the part before the first underscore
+              const fileBaseId = filename.split('_')[0] || filename;
+
+              const isVideo = item.url.includes('.mp4') || item.url.includes('.mov') || item.url.includes('.m4v');
+
+              // Priority: If we don't have this ID, or if we have it as a video but found an image version
+              if (!uniqueFormatsMap.has(fileBaseId) || (uniqueFormatsMap.get(fileBaseId).hasVideo && !isVideo)) {
+                uniqueFormatsMap.set(fileBaseId, {
+                  mimeType: isVideo ? 'video/mp4' : 'image/jpeg',
+                  hasVideo: isVideo,
+                  hasAudio: isVideo,
+                  container: isVideo ? 'mp4' : 'jpg',
+                  url: item.url
+                });
+              }
             });
-            return res.json({ title: "Instagram Post/Reel", author: "Instagram User", thumbnail: ig.data[0].url, platform: 'instagram', formats });
+
+            const uniqueFormats = Array.from(uniqueFormatsMap.values()).map((f: any, idx: number) => ({
+              itag: 137 + idx,
+              ...f,
+              qualityLabel: f.hasVideo ? `Video ${idx + 1}` : `Imagen ${idx + 1}`,
+              proxyUrl: `/api/proxy-image?url=${encodeURIComponent(f.url)}`
+            }));
+
+            return res.json({
+              title: "Instagram Media",
+              author: "Instagram User",
+              thumbnail: uniqueFormats[0]?.proxyUrl || "",
+              platform: 'instagram',
+              formats: uniqueFormats
+            });
           }
         } catch (e) { }
       }

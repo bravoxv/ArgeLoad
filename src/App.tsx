@@ -281,7 +281,10 @@ export default function App() {
             {info && !loading && (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-700">
                 <div className="rounded-[2.5rem] overflow-hidden border border-white/10 aspect-video relative shadow-2xl group">
-                  <img src={info.thumbnail.startsWith('http') ? info.thumbnail : `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(info.thumbnail)}`} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                  <img
+                    src={(info as any).proxyThumbnail || (info.thumbnail.includes('instagram.com') || info.thumbnail.includes('fbcdn.net') ? `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(info.thumbnail)}` : (info.thumbnail.startsWith('http') ? info.thumbnail : `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(info.thumbnail)}`))}
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent flex flex-col justify-end p-6">
                     <h2 className="font-black text-lg text-white leading-tight mb-1">{info.title}</h2>
                     <div className="flex items-center gap-2">
@@ -332,7 +335,11 @@ export default function App() {
                         <div className="grid grid-cols-2 gap-3">
                           {uniqueImageFormats.map((f, i) => (
                             <button key={`img-${i}`} onClick={() => handleDownload(f, false)} className="w-full aspect-square bg-sky-900/10 border border-sky-500/20 rounded-[1.5rem] active:scale-95 transition-all hover:bg-sky-900/40 relative overflow-hidden group">
-                              <img src={f.url.startsWith('http') ? f.url : `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(f.url)}`} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                              <img
+                                src={(f as any).proxyUrl || (f.url.includes('instagram.com') || f.url.includes('fbcdn.net') ? `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(f.url)}` : (f.url.startsWith('http') ? f.url : `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(f.url)}`))}
+                                className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform"
+                                loading="lazy"
+                              />
                               <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 text-center backdrop-blur-sm">
                                 <p className="text-[10px] font-black text-white">IMAGEN {i + 1}</p>
                               </div>
@@ -416,7 +423,6 @@ export default function App() {
             )}
           </div>
         )}
-
       </main>
     </div>
   );
