@@ -63,25 +63,55 @@ async function startServer() {
       // 1. YouTube (play-dl is very fast)
       if (domain.includes('youtube.com') || domain.includes('youtu.be')) {
         try {
-          const play = await playPromise;
-          const info: any = await play.video_info(cleanUrl);
-          const formats = info.format.filter((f: any) => f.hasVideo && f.hasAudio).map((f: any) => ({
-            itag: f.itag,
-            mimeType: f.mime_type || f.mimeType || 'video/mp4',
-            qualityLabel: f.qualityLabel || '720p',
-            hasVideo: true,
-            hasAudio: true,
-            container: 'mp4',
-            url: f.url,
-            contentLength: f.contentLength
-          }));
+          // Normalize Shorts URL
+          let ytUrl = cleanUrl;
+          if (ytUrl.includes('/shorts/')) {
+            ytUrl = ytUrl.replace('/shorts/', '/watch?v=');
+          }
 
-          const audio = info.format.filter((f: any) => !f.hasVideo && f.hasAudio).sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0))[0];
-          if (audio) {
+          // Check if it's a Community Post
+          if (ytUrl.includes('/post/')) {
+            try {
+              const info: any = await ytdl(ytUrl, { dumpSingleJson: true, noCheckCertificates: true, noWarnings: true });
+              if (info?.thumbnails) {
+                const formats = info.thumbnails.map((t: any, i: number) => ({
+                  itag: 200 + i, mimeType: 'image/jpeg', qualityLabel: `Imagen ${i + 1}`,
+                  hasVideo: false, hasAudio: false, container: 'jpg', url: t.url
+                }));
+                return res.json({ title: info.title || "Publicación de YouTube", author: info.uploader || "YouTube", thumbnail: info.thumbnails[0].url, platform: 'youtube', formats });
+              }
+            } catch (e) { }
+          }
+
+          const play = await playPromise;
+          const info: any = await play.video_info(ytUrl);
+
+          // Get all available formats
+          const formats = info.format.map((f: any, idx: number) => {
+            const hasV = f.hasVideo || f.vcodec !== 'none';
+            const hasA = f.hasAudio || f.acodec !== 'none';
+            const isVideo = hasV && hasA;
+            const isOnlyAudio = !hasV && hasA;
+
+            if (isVideo) {
+              return {
+                itag: f.itag || 137 + idx,
+                mimeType: f.mime_type || 'video/mp4',
+                qualityLabel: f.qualityLabel || f.resolution || 'HD',
+                hasVideo: true, hasAudio: true, container: 'mp4',
+                url: f.url, contentLength: f.contentLength
+              };
+            }
+            return null;
+          }).filter(Boolean);
+
+          // Get highest quality audio
+          const bestAudio = info.format.filter((f: any) => !f.hasVideo && f.hasAudio).sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+          if (bestAudio) {
             formats.push({
               itag: 140, mimeType: 'audio/mp4', qualityLabel: 'Audio Alta Calidad',
               hasVideo: false, hasAudio: true, container: 'mp3',
-              url: audio.url, contentLength: audio.contentLength
+              url: bestAudio.url, contentLength: bestAudio.contentLength
             });
           }
 
@@ -92,7 +122,20 @@ async function startServer() {
             platform: 'youtube',
             formats
           });
-        } catch (e) { console.error("YT Fast error", e); }
+        } catch (e) {
+          console.error("YT Fast error", e);
+          // Final fallback to yt-dlp if play-dl fails
+          try {
+            const info: any = await ytdl(cleanUrl, { dumpSingleJson: true, noCheckCertificates: true });
+            if (info?.formats) {
+              const formats = info.formats.filter((f: any) => f.url && (f.vcodec !== 'none' && f.acodec !== 'none')).map((f: any) => ({
+                itag: 137, mimeType: 'video/mp4', qualityLabel: f.format_note || f.resolution || 'Original',
+                hasVideo: true, hasAudio: true, container: 'mp4', url: f.url
+              }));
+              return res.json({ title: info.title || "YouTube", author: info.uploader || "YouTube", thumbnail: info.thumbnail || "", platform: 'youtube', formats });
+            }
+          } catch (e2) { }
+        }
       }
 
       // 2. Ruhend / BTCH for Social Media (Fast Scrapers)
