@@ -22,5 +22,12 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "carpetagpt",
+    "carpeta_mejoras",
+    "android",
+    "dist"
+  ]
 }
