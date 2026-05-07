@@ -7,6 +7,7 @@ import React, { useState, useEffect } from "react";
 // 1. Abre la terminal y escribe 'ipconfig'
 // 2. Busca 'IPv4 Address' (ej. 192.168.1.15)
 // 3. Ponla aquí abajo:
+// IMPORTANTE: Si estás probando LOCALMENTE, cambia esto a tu IP o "http://localhost:3000"
 const API_BASE_URL = "https://omnidown-backend.onrender.com";
 
 interface Format {
@@ -123,7 +124,15 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
       });
-      const data = await response.json();
+
+      const text = await response.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : { error: "El servidor no respondió correctamente" };
+      } catch (e) {
+        data = { error: "El servidor envió una respuesta inválida (no es JSON)" };
+      }
+
       if (!response.ok) throw new Error(data.error || "Error al analizar");
       setInfo(data);
     } catch (err: any) {
@@ -155,7 +164,15 @@ export default function App() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ url: cleanText }),
           });
-          const data = await response.json();
+
+          const text = await response.text();
+          let data;
+          try {
+            data = text ? JSON.parse(text) : { error: "Sin respuesta del servidor" };
+          } catch (e) {
+            data = { error: "Respuesta no válida del servidor" };
+          }
+
           if (!response.ok) throw new Error(data.error || "Error al analizar");
           setInfo(data);
           setLoading(false);
@@ -199,7 +216,14 @@ export default function App() {
         body: formData,
       });
 
-      const data = await response.json();
+      const text = await response.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : { error: "Procesamiento fallido sin respuesta" };
+      } catch (e) {
+        data = { error: "Error de formato en el servidor" };
+      }
+
       if (!response.ok || !data.success) throw new Error(data.error || "Fallo en el servidor al procesar el archivo local");
 
       let finalDownloadUrl = data.downloadUrl;

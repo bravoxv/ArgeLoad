@@ -567,7 +567,7 @@ async function startServer() {
 
 
   app.post("/api/studio", upload.single("file"), (req, res) => {
-    if (!req.file) return res.status(400).send("No se subió ningún archivo");
+    if (!req.file) return res.status(400).json({ error: "No se subió ningún archivo" });
     const { quality } = req.body;
 
     // Improved detection
