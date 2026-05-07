@@ -1,8 +1,16 @@
 node_modules/
-build/
 dist/
+build/
 coverage/
 .DS_Store
 *.log
 .env*
 !.env.example
+uploads/
+test_*.js
+test-*.mjs
+test-*.cjs
+ig_out.json
+vx_out.json
+test_ig.js
+android/
