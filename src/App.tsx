@@ -47,9 +47,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<VideoInfo | null>(null);
   const [clicks, setClicks] = useState(0);
-  const [tab, setTab] = useState<'web' | 'local' | 'history'>('web');
-  const [localFile, setLocalFile] = useState<File | null>(null);
-  const [quality, setQuality] = useState(60);
+  const [tab, setTab] = useState<'web' | 'history'>('web');
   const [history, setHistory] = useState<DownloadItem[]>([]);
 
   useEffect(() => {
@@ -197,47 +195,8 @@ export default function App() {
     // Trigger download in system browser
     const link = document.createElement('a');
     link.href = downloadUrl;
-    link.target = '_system'; // For Capacitor
+    link.target = '_system';
     link.click();
-  };
-
-  const handleLocalSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!localFile) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const formData = new FormData();
-      formData.append('file', localFile);
-      formData.append('quality', String(quality));
-
-      const response = await fetch(`${API_BASE_URL}/api/studio`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      const text = await response.text();
-      let data;
-      try {
-        data = text ? JSON.parse(text) : { error: "Procesamiento fallido sin respuesta" };
-      } catch (e) {
-        data = { error: "Error de formato en el servidor" };
-      }
-
-      if (!response.ok || !data.success) throw new Error(data.error || "Fallo en el servidor al procesar el archivo local");
-
-      let finalDownloadUrl = data.downloadUrl;
-      if (finalDownloadUrl.startsWith('/')) {
-        finalDownloadUrl = `${API_BASE_URL}${finalDownloadUrl}`;
-      }
-
-      window.open(finalDownloadUrl, '_system');
-      addToHistory(`Editado: ${localFile.name}`, finalDownloadUrl, 'local', '');
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const videoFormats = info?.formats.filter((f) => f.hasVideo) || [];
@@ -269,7 +228,6 @@ export default function App() {
 
         <div className="flex w-full bg-neutral-900 border border-white/5 rounded-3xl p-1 mb-8 overflow-hidden">
           <button onClick={() => setTab('web')} className={`flex-1 py-3 text-[10px] font-black rounded-2xl transition-all ${tab === 'web' ? 'bg-sky-600 shadow-lg text-white' : 'text-neutral-500 hover:text-white'}`}>DESCARGAR</button>
-          <button onClick={() => setTab('local')} className={`flex-1 py-3 text-[10px] font-black rounded-2xl transition-all ${tab === 'local' ? 'bg-sky-600 shadow-lg text-white' : 'text-neutral-500 hover:text-white'}`}>ESTUDIO</button>
           <button onClick={() => setTab('history')} className={`flex-1 py-3 text-[10px] font-black rounded-2xl transition-all ${tab === 'history' ? 'bg-sky-600 shadow-lg text-white' : 'text-neutral-500 hover:text-white'}`}>HISTORIAL</button>
         </div>
 
@@ -279,8 +237,7 @@ export default function App() {
               <div className="h-full bg-sky-500 transition-all duration-300 shadow-[0_0_15px_rgba(56,189,248,0.5)]" style={{ width: `${progress}%` }} />
             </div>
             <p className="text-[10px] text-center text-neutral-500 mt-3 font-black tracking-widest uppercase">
-              {tab === 'web' ? 'Procesando calidad: ' : 'Comprimiendo archivo, por favor espera... '}
-              {progress}%
+              Procesando... {progress}%
             </p>
           </div>
         )}
@@ -334,7 +291,7 @@ export default function App() {
                 <div className="grid gap-3">
                   <div className="grid gap-3">
                     <div className="bg-neutral-900 border border-white/5 p-4 rounded-3xl mb-2">
-                      <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mb-2">ExtracciÃ³n de MP3</h3>
+                      <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mb-2">Extracción de MP3</h3>
                       {(uniqueVideoFormats.length > 0 || audioFormats.length > 0) ? (
                         <button onClick={() => handleDownload(audioFormats[0] || uniqueVideoFormats[0], true)} className="w-full flex items-center justify-center p-4 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-2xl transition-all font-black text-sm uppercase tracking-wider">
                           <Music className="w-5 h-5 mr-3" />
@@ -367,12 +324,12 @@ export default function App() {
                     {uniqueImageFormats.length > 0 && (
                       <div className="mt-5">
                         <div className="flex justify-between items-center px-2 mb-3">
-                          <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] text-sky-400">ColecciÃ³n ({uniqueImageFormats.length})</h3>
+                          <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] text-sky-400">Colección ({uniqueImageFormats.length})</h3>
                           <button
                             onClick={() => {
                               if (window.confirm(`¿Quieres descargar las ${uniqueImageFormats.length} imágenes de la colección?`)) {
                                 uniqueImageFormats.forEach((f, idx) => {
-                                  setTimeout(() => handleDownload(f, false), idx * 800); // Staggered to avoid browser blocks
+                                  setTimeout(() => handleDownload(f, false), idx * 800);
                                 });
                               }
                             }}
@@ -406,36 +363,6 @@ export default function App() {
             )}
           </div>
         )}
-
-        {tab === 'local' && (
-          <form onSubmit={handleLocalSubmit} className="space-y-4 mb-10 animate-in fade-in slide-in-from-bottom-5 duration-700">
-            <div className="p-6 bg-neutral-900 border border-white/5 rounded-3xl space-y-5 shadow-2xl">
-              <div>
-                <h3 className="text-[11px] font-black text-neutral-500 uppercase tracking-[0.2em] mb-2">1. Selecciona Archivo</h3>
-                <input type="file" onChange={(e) => setLocalFile(e.target.files ? e.target.files[0] : null)} className="w-full text-sm text-neutral-400 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-sky-500/10 file:text-sky-400 focus:outline-none hover:file:bg-sky-500/20 cursor-pointer transition-all" />
-              </div>
-
-              <div>
-                <h3 className="text-[11px] font-black text-neutral-500 uppercase tracking-[0.2em] mb-2 flex justify-between">
-                  <span>2. Calidad de Compresión</span>
-                  <span className="text-sky-400">{quality}%</span>
-                </h3>
-                <input type="range" min="10" max="100" value={quality} onChange={(e) => setQuality(Number(e.target.value))} className="w-full accent-sky-500 h-2 bg-black/40 rounded-full appearance-none cursor-pointer" />
-                <p className="text-[9px] text-neutral-600 text-center font-bold mt-1">Bajar calidad reducirá increíblemente el tamaño del archivo.</p>
-              </div>
-
-
-              <button
-                type="submit"
-                disabled={loading || !localFile}
-                className="w-full py-5 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-black rounded-2xl transition-all shadow-xl shadow-sky-600/20 active:scale-[0.98]"
-              >
-                {loading ? <Loader2 className="animate-spin mx-auto w-6 h-6" /> : "PROCESAR ARCHIVO LOCAL"}
-              </button>
-            </div>
-          </form>
-        )}
-
         {tab === 'history' && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-5 duration-700">
             <div className="flex justify-between items-center mb-4 px-2">

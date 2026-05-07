@@ -566,63 +566,6 @@ async function startServer() {
   });
 
 
-  app.post("/api/studio", upload.single("file"), (req, res) => {
-    if (!req.file) return res.status(400).json({ error: "No se subió ningún archivo" });
-    const { quality } = req.body;
-
-    // Improved detection
-    const isImage = req.file.mimetype.startsWith("image/") || !!(req.file.originalname && req.file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/i));
-    const isAudio = !isImage && (req.file.mimetype.startsWith("audio/") || !!(req.file.originalname && req.file.originalname.match(/\.(mp3|wav|m4a)$/i)));
-
-    const ext = isImage ? 'jpg' : (isAudio ? 'mp3' : 'mp4');
-    const outputFilename = `out_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-    const outputPath = path.join(__dirname, 'uploads', outputFilename);
-
-    let command = ffmpeg(req.file.path).on("end", () => {
-      fs.unlink(req.file!.path, () => { });
-      res.json({ success: true, downloadUrl: `/api/studio/download/${outputFilename}` });
-
-      setTimeout(() => {
-        if (fs.existsSync(outputPath)) {
-          fs.unlink(outputPath, () => { });
-        }
-      }, 30 * 60 * 1000); // 30 mins
-    }).on("error", (err) => {
-      console.error(err);
-      fs.unlink(req.file!.path, () => { });
-      res.status(500).json({ error: "El procesamiento de FFMPEG falló" });
-    });
-
-    if (isImage) {
-      // Image compression
-      command.outputOptions([`-q:v ${quality ? Math.floor(1 + ((100 - quality) / 100) * 30) : 2}`]).toFormat("image2").save(outputPath);
-    } else if (isAudio) {
-      // Audio compression
-      if (quality && Number(quality) < 100) {
-        const bitrate = Math.floor(32 + (Number(quality) / 100) * 224); // Scale 32k to 256k
-        command = command.outputOptions([`-b:a ${bitrate}k`]);
-      }
-      command.toFormat("mp3").save(outputPath);
-    } else {
-      // Video compression
-      if (quality && Number(quality) < 100) {
-        const crf = Math.floor(18 + ((100 - Number(quality)) / 100) * 33);
-        command = command.outputOptions(['-c:v libx264', `-crf ${crf}`, '-preset ultrafast']);
-      } else {
-        command = command.outputOptions(['-c copy']);
-      }
-      command.toFormat("mp4").save(outputPath);
-    }
-  });
-
-  app.get("/api/studio/download/:filename", (req, res) => {
-    const filePath = path.join(__dirname, 'uploads', req.params.filename);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).send("Archivo no encontrado o expirado");
-    }
-    // Remove fs.unlink to avoid Android Download Manager failing the request when it restarts it.
-    res.download(filePath, `argeload_local_edit.${filePath.split('.').pop()}`);
-  });
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
