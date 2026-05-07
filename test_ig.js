@@ -1,14 +1,14 @@
-import ruhend from "ruhend-scraper";
+import btch from "btch-downloader";
 import fs from "fs";
 
 async function main() {
-    const cleanUrl = 'https://www.instagram.com/p/DX96hKcFf6a/?img_index=1';
+    const cleanUrl = 'https://www.instagram.com/stories/cristiano/3362145347209706399/';
     try {
-        const ig = await ruhend.igdl(cleanUrl);
-        console.log("IG Data length:", ig?.data?.length);
-        fs.writeFileSync("ig_out.json", JSON.stringify(ig, null, 2));
+        const igb = await btch.igdl(cleanUrl);
+        console.log("BTCH Data length:", igb?.result?.length);
+        fs.writeFileSync("ig_out.json", JSON.stringify(igb, null, 2));
     } catch (e) {
-        console.error(e);
+        console.error("BTCH failed", e);
     }
 }
 main();
