@@ -188,7 +188,14 @@ export default function App() {
 
   const handleDownload = (format: Format, isMp3: boolean) => {
     if (!info) return;
-    let downloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(format.url)}&ext=${format.container}&proxy=true&title=${encodeURIComponent(info.title)}`;
+
+    // Generar un nombre de archivo seguro para garantizar que Android respete el titulo
+    const safeTitle = info.title.replace(/[^a-zA-Z0-9.\-_ ()]/g, "").trim().replace(/\s+/g, "_") || 'video';
+    const targetExt = isMp3 ? 'mp3' : format.container;
+    const finalFilename = `${safeTitle}.${targetExt}`;
+
+    // Inyectamos el pseudo-path con el nombre del archivo para asegurar la descarga nativa en App
+    let downloadUrl = `${API_BASE_URL}/api/download/${encodeURIComponent(finalFilename)}?url=${encodeURIComponent(format.url)}&ext=${format.container}&proxy=true&title=${encodeURIComponent(info.title)}`;
     if (isMp3) downloadUrl += `&mp3=true`;
     else if (format.hasVideo && videoScale !== 'original') downloadUrl += `&scale=${videoScale}`;
 
