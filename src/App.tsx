@@ -49,6 +49,7 @@ export default function App() {
   const [clicks, setClicks] = useState(0);
   const [tab, setTab] = useState<'web' | 'history'>('web');
   const [history, setHistory] = useState<DownloadItem[]>([]);
+  const [videoScale, setVideoScale] = useState<'original' | '16_9' | '9_16'>('original');
 
   useEffect(() => {
     const saved = localStorage.getItem('omni_history');
@@ -189,6 +190,7 @@ export default function App() {
     if (!info) return;
     let downloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(format.url)}&ext=${format.container}&proxy=true&title=${encodeURIComponent(info.title)}`;
     if (isMp3) downloadUrl += `&mp3=true`;
+    else if (format.hasVideo && videoScale !== 'original') downloadUrl += `&scale=${videoScale}`;
 
     addToHistory(info.title, downloadUrl, info.platform, info.thumbnail);
 
@@ -302,7 +304,16 @@ export default function App() {
                       )}
                     </div>
 
-                    {uniqueVideoFormats.length > 0 && <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] px-2 mt-4 mb-1 text-sky-400">Archivos de Video</h3>}
+                    {uniqueVideoFormats.length > 0 && (
+                      <div className="mt-4 mb-3 px-2">
+                        <h3 className="text-[11px] font-black text-neutral-600 uppercase tracking-[0.3em] text-sky-400 mb-2">Formato de Video</h3>
+                        <div className="flex bg-neutral-900 border border-white/5 rounded-2xl p-1">
+                          <button onClick={() => setVideoScale('original')} className={`flex-1 py-2 text-[10px] font-black rounded-xl transition-all ${videoScale === 'original' ? 'bg-sky-600 shadow-lg text-white' : 'text-neutral-500 hover:text-white'}`}>ORIGINAL</button>
+                          <button onClick={() => setVideoScale('16_9')} className={`flex-1 py-2 text-[10px] font-black rounded-xl transition-all ${videoScale === '16_9' ? 'bg-sky-600 shadow-lg text-white' : 'text-neutral-500 hover:text-white'}`}>16:9 RECORTAR</button>
+                          <button onClick={() => setVideoScale('9_16')} className={`flex-1 py-2 text-[10px] font-black rounded-xl transition-all ${videoScale === '9_16' ? 'bg-sky-600 shadow-lg text-white' : 'text-neutral-500 hover:text-white'}`}>9:16 ADAPTAR</button>
+                        </div>
+                      </div>
+                    )}
 
                     {uniqueVideoFormats.map((f, i) => (
                       <button key={i} onClick={() => handleDownload(f, false)} className="w-full flex items-center justify-between p-5 bg-neutral-900 border border-white/5 rounded-[2rem] active:scale-95 transition-all hover:bg-neutral-800/80">

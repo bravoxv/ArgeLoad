@@ -450,7 +450,7 @@ async function startServer() {
   // API Route to proxy the download - since btch-downloader gives us direct links, we'll just redirect to them!
   app.get("/api/download", async (req, res) => {
     try {
-      const { url, ext, proxy, title, mp3, start, end } = req.query;
+      const { url, ext, proxy, title, mp3, start, end, scale } = req.query;
 
       if (!url || typeof url !== 'string') {
         return res.status(400).send("Missing required parameters");
@@ -508,12 +508,18 @@ async function startServer() {
         else if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(extLower)) res.setHeader('Content-Type', 'image/jpeg');
         else res.setHeader('Content-Type', 'video/mp4');
 
-        if (start || end) {
+        if (start || end || scale) {
           let command = ffmpeg(fetchRes.body)
             .inputFormat(ext === 'mp4' ? 'mp4' : ext)
             .toFormat(ext === 'mp4' ? 'mp4' : ext)
             .outputOptions(['-movflags', 'frag_keyframe+empty_moov']) // Crucial for mp4 streaming output
             .on('error', (err) => console.error("FFMPEG video trim error:", err));
+
+          if (scale === '16_9') {
+            command = command.videoFilters("crop='trunc(min(iw,ih*16/9)/2)*2':'trunc(min(ih,iw*9/16)/2)*2'");
+          } else if (scale === '9_16') {
+            command = command.videoFilters("scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:-1:-1:color=black");
+          }
 
           if (start) command = command.setStartTime(String(start));
 
