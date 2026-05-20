@@ -370,6 +370,7 @@ async function startServer() {
 
       if (mp3 === 'true') {
         res.setHeader('Content-Type', 'audio/mpeg');
+        if (!fetchRes.body) return res.status(500).send("No source body");
         const nodeStream = Readable.fromWeb(fetchRes.body as any);
         let command = ffmpeg(nodeStream).toFormat('mp3');
         if (start) command = command.setStartTime(String(start));
@@ -377,6 +378,10 @@ async function startServer() {
           const duration = Number(end) - Number(start || 0);
           if (duration > 0) command = command.setDuration(duration);
         }
+        command.on('error', (err) => {
+          console.error("FFmpeg MP3 Error:", err.message);
+          if (!res.headersSent) res.status(500).send("Processing error");
+        });
         return command.pipe(res);
       } else {
         const extLower = String(targetExt).toLowerCase();
@@ -385,6 +390,7 @@ async function startServer() {
         else res.setHeader('Content-Type', 'video/mp4');
 
         if (start || end || scale) {
+          if (!fetchRes.body) return res.status(500).send("No source body");
           const nodeStream = Readable.fromWeb(fetchRes.body as any);
           let command = ffmpeg(nodeStream)
             .toFormat('mp4')
@@ -400,19 +406,26 @@ async function startServer() {
 
           if (scale === '16_9') command = command.videoFilters("crop='trunc(min(iw,ih*16/9)/2)*2':'trunc(min(ih,iw*9/16)/2)*2'");
           else if (scale === '9_16') command = command.videoFilters("scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black");
-          
+
           if (start) command = command.setStartTime(String(start));
           if (end) {
-            const getSec = (t: string) => t.split(':').reverse().reduce((acc, val, i) => acc + (Number(val) * Math.pow(60, i)), 0);
+            const getSec = (t: string) => String(t).split(':').reverse().reduce((acc, val, i) => acc + (Number(val) * Math.pow(60, i)), 0);
             const duration = getSec(String(end)) - getSec(String(start || '0'));
             if (duration > 0) command = command.setDuration(duration);
           }
-          return command.pipe(res);
+
+          command.on('error', (err) => {
+            console.error("FFmpeg Video Error:", err.message);
+            if (!res.headersSent) res.status(500).send("Processing error: " + err.message);
+          });
+
+          return command.pipe(res, { end: true });
         }
 
         if (fetchRes.body) {
-          // Convert Web Stream to Node Stream for piping
+          res.setHeader('Content-Length', fetchRes.headers.get('content-length') || '');
           const nodeStream = Readable.fromWeb(fetchRes.body as any);
+          nodeStream.on('error', (err) => console.error("Stream Error:", err));
           return nodeStream.pipe(res);
         }
       }
