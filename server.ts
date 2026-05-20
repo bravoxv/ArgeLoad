@@ -5,10 +5,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
-import fetch from 'node-fetch';
 import ytdl from 'youtube-dl-exec';
 import multer from 'multer';
 import fs from 'fs';
+import { Readable } from 'stream';
 
 const upload = multer({ dest: 'uploads/' });
 
@@ -338,7 +338,8 @@ async function startServer() {
 
       if (mp3 === 'true') {
         res.setHeader('Content-Type', 'audio/mpeg');
-        let command = ffmpeg(fetchRes.body).toFormat('mp3');
+        const nodeStream = Readable.fromWeb(fetchRes.body as any);
+        let command = ffmpeg(nodeStream).toFormat('mp3');
         if (start) command = command.setStartTime(String(start));
         if (end) {
           const duration = Number(end) - Number(start || 0);
@@ -352,7 +353,8 @@ async function startServer() {
         else res.setHeader('Content-Type', 'video/mp4');
 
         if (start || end || scale) {
-          let command = ffmpeg(fetchRes.body).toFormat('mp4').outputOptions(['-preset', 'ultrafast', '-crf', '28', '-movflags', 'frag_keyframe+empty_moov']);
+          const nodeStream = Readable.fromWeb(fetchRes.body as any);
+          let command = ffmpeg(nodeStream).toFormat('mp4').outputOptions(['-preset', 'ultrafast', '-crf', '28', '-movflags', 'frag_keyframe+empty_moov']);
           if (scale === '16_9') command = command.videoFilters("crop='trunc(min(iw,ih*16/9)/2)*2':'trunc(min(ih,iw*9/16)/2)*2'");
           else if (scale === '9_16') command = command.videoFilters("scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black");
           if (start) command = command.setStartTime(String(start));
@@ -364,7 +366,11 @@ async function startServer() {
           return command.pipe(res);
         }
 
-        if (fetchRes.body) return fetchRes.body.pipe(res);
+        if (fetchRes.body) {
+          // Convert Web Stream to Node Stream for piping
+          const nodeStream = Readable.fromWeb(fetchRes.body as any);
+          return nodeStream.pipe(res);
+        }
       }
     } catch (error: any) {
       res.status(500).send("Server Error: " + error.message);
@@ -378,7 +384,10 @@ async function startServer() {
       if (!url || typeof url !== 'string') return res.status(400).send("Missing URL");
       const fetchRes = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://instagram.com/' } });
       res.setHeader('Content-Type', fetchRes.headers.get('content-type') || 'image/jpeg');
-      if (fetchRes.body) return fetchRes.body.pipe(res);
+      if (fetchRes.body) {
+        const nodeStream = Readable.fromWeb(fetchRes.body as any);
+        return nodeStream.pipe(res);
+      }
     } catch (e) { res.status(500).send("Error"); }
   });
 
