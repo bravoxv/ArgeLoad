@@ -372,7 +372,9 @@ async function startServer() {
         res.setHeader('Content-Type', 'audio/mpeg');
         if (!fetchRes.body) return res.status(500).send("No source body");
         const nodeStream = Readable.fromWeb(fetchRes.body as any);
-        let command = ffmpeg(nodeStream).toFormat('mp3');
+        let command = ffmpeg(nodeStream)
+          .toFormat('mp3')
+          .audioBitrate('128k'); // Standard quality, low file size
         if (start) command = command.setStartTime(String(start));
         if (end) {
           const duration = Number(end) - Number(start || 0);
@@ -400,19 +402,39 @@ async function startServer() {
             .videoCodec('libx264')
             .audioCodec('aac')
             .outputOptions([
-              '-preset', 'ultrafast',
-              '-crf', '23',
-              '-pix_fmt', 'yuv420p',
-              '-movflags', '+faststart',
-              '-tune', 'fastdecode'
+              '-preset', 'faster',      // Better compression than veryfast/ultrafast
+              '-crf', '28',             // Good balance for size (standard is 23, 28 is ~50% smaller)
+              '-pix_fmt', 'yuv420p',    // Essential for compatibility
+              '-movflags', '+faststart', // Essential for YouTube/Web
+              '-profile:v', 'main',     // Highly compatible profile
+              '-level', '4.0',          // Standard level
+              '-colorspace', 'bt709',   // YouTube preferred colorspace
+              '-color_trc', 'bt709',
+              '-color_primaries', 'bt709'
             ]);
 
-          if (scale === '16_9') command = command.videoFilters("crop='trunc(min(iw,ih*16/9)/2)*2':'trunc(min(ih,iw*9/16)/2)*2'");
-          else if (scale === '9_16') command = command.videoFilters("scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black");
+          if (scale === '16_9') {
+            // Scale and Crop to 1280x720 (Standard HD)
+            command = command.videoFilters([
+              "scale='if(gt(iw/ih,16/9),-2,1280)':'if(gt(iw/ih,16/9),720,-2)':force_original_aspect_ratio=increase",
+              "crop=1280:720",
+              "setsar=1"
+            ]);
+          } else if (scale === '9_16') {
+            // Scale and Pad to 720x1280 (Standard HD Vertical)
+            command = command.videoFilters([
+              "scale=720:1280:force_original_aspect_ratio=decrease",
+              "pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=black",
+              "setsar=1"
+            ]);
+          }
 
           if (start) command = command.setStartTime(String(start));
           if (end) {
-            const getSec = (t: string) => String(t).split(':').reverse().reduce((acc, val, i) => acc + (Number(val) * Math.pow(60, i)), 0);
+            const getSec = (t: string) => {
+              const parts = String(t).split(':').reverse();
+              return parts.reduce((acc, val, i) => acc + (Number(val) * Math.pow(60, i)), 0);
+            };
             const duration = getSec(String(end)) - getSec(String(start || '0'));
             if (duration > 0) command = command.setDuration(duration);
           }
