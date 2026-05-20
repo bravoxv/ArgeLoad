@@ -172,14 +172,11 @@ async function startServer() {
       // 6. Pinterest
       if (domain.includes('pinterest.com') || domain.includes('pin.it')) {
         try {
-          const pin = await btch.pinterest(cleanUrl);
-          if (pin && (pin.url || pin.thumbnail)) {
-            const mediaUrl = pin.url || pin.thumbnail;
-            const isVideo = mediaUrl.includes('.mp4');
-            return res.json({
-              title: pin.title || "Pinterest Post", thumbnail: pin.thumbnail || pin.url, platform: 'pinterest',
-              formats: [{ itag: 800, mimeType: isVideo ? 'video/mp4' : 'image/jpeg', qualityLabel: isVideo ? 'Video Original' : 'Imagen Original', hasVideo: isVideo, hasAudio: isVideo, container: isVideo ? 'mp4' : 'jpg', url: mediaUrl }]
-            });
+          const pinData = await btch.pinterest(cleanUrl);
+          if (pinData) {
+            const p = pinData as any;
+            const formats = [{ itag: 800, mimeType: 'image/jpeg', qualityLabel: 'Original', hasVideo: false, hasAudio: false, container: 'jpg', url: p.url || p.thumbnail, proxyUrl: `/api/proxy-image?url=${encodeURIComponent(p.url || p.thumbnail)}` }];
+            return res.json({ title: p.title || "Pinterest Image", author: "Pinterest", thumbnail: p.thumbnail || p.url, platform: 'pinterest', formats });
           }
         } catch (e) { }
       }
@@ -213,7 +210,7 @@ async function startServer() {
       // 9. NEW: SoundCloud
       if (domain.includes('soundcloud.com')) {
         try {
-          const sc = await btch.soundcloud(cleanUrl);
+          const sc: any = await btch.soundcloud(cleanUrl);
           if (sc?.download) {
             return res.json({
               title: sc.title || "SoundCloud Track", author: "SoundCloud Artist", thumbnail: sc.thumb || "", platform: 'soundcloud',
@@ -239,12 +236,11 @@ async function startServer() {
       // 11. Threads
       if (domain.includes('threads.net')) {
         try {
-          const thr = await btch.threads(cleanUrl);
-          if (thr?.result) {
-            const formats = thr.result.map((r: any, i: number) => {
-              const isVideo = r.url.includes('.mp4');
-              return { itag: 1300 + i, mimeType: isVideo ? 'video/mp4' : 'image/jpeg', qualityLabel: isVideo ? `Video ${i + 1}` : `Imagen ${i + 1}`, hasVideo: isVideo, hasAudio: isVideo, container: isVideo ? 'mp4' : 'jpg', url: r.url };
-            });
+          const threadsData = await btch.threads(cleanUrl);
+          if (threadsData) {
+            const formats = (threadsData as any).map((item: any, i: number) => ({
+              itag: 1300 + i, mimeType: item.type === 'video' ? 'video/mp4' : 'image/jpeg', qualityLabel: item.type === 'video' ? `Video ${i + 1}` : `Imagen ${i + 1}`, hasVideo: item.type === 'video', hasAudio: item.type === 'video', container: item.type === 'video' ? 'mp4' : 'jpg', url: item.url
+            }));
             return res.json({ title: "Threads Post", author: "Threads User", thumbnail: formats[0]?.url, platform: 'threads', formats });
           }
         } catch (e) { }
@@ -310,9 +306,17 @@ async function startServer() {
 
       const fetchRes = await fetch(url, { headers: fetchHeaders });
       const targetExt = mp3 === 'true' ? 'mp3' : (ext || 'mp4');
-      let filename = `${(title as string || 'video').replace(/[^a-zA-Z0-9]/g, '_')}.${targetExt}`;
+
+      // Sanitizar el título para el nombre del archivo
+      let safeTitle = (title as string || 'ArgeLoad_Media')
+        .trim()
+        .replace(/[/\\?%*:|"<>]/g, '_') // Caracteres no válidos en Windows/Unix
+        .replace(/\s+/g, '_'); // Reemplazar espacios por guiones bajos
+
+      let filename = `${safeTitle}.${targetExt}`;
 
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
 
       if (mp3 === 'true') {
         res.setHeader('Content-Type', 'audio/mpeg');
