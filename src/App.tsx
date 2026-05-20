@@ -85,7 +85,7 @@ export default function App() {
     localStorage.setItem('omni_history', JSON.stringify(newHistory));
   };
 
-  const resolveImageUrl = (url: string | undefined): string => {
+  const resolveMediaUrl = (url: string | undefined): string => {
     if (!url) return '/placeholder.png';
     if (url.startsWith('/api/proxy-image')) return `${API_BASE_URL}${url}`;
     if (url.includes('instagram.com') || url.includes('fbcdn.net') || url.includes('twimg.com')) return `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(url)}`;
@@ -203,7 +203,7 @@ export default function App() {
                   <div className="absolute inset-0 bg-sky-500 blur-2xl opacity-20 animate-pulse" />
                   {!selectedFormat.isMp3 && (selectedFormat.format.hasVideo || selectedFormat.format.mimeType.includes('video')) ? (
                     <video
-                      src={selectedFormat.format.proxyUrl || selectedFormat.format.url}
+                      src={resolveMediaUrl(selectedFormat.format.proxyUrl || selectedFormat.format.url)}
                       controls
                       autoPlay
                       muted
@@ -212,7 +212,7 @@ export default function App() {
                     />
                   ) : (
                     <img
-                      src={resolveImageUrl(info?.thumbnail)}
+                      src={resolveMediaUrl(info?.thumbnail)}
                       className="w-32 h-32 mx-auto object-cover rounded-3xl relative z-10 shadow-2xl border border-white/10"
                     />
                   )}
@@ -236,9 +236,10 @@ export default function App() {
                   </span>
                 </div>
 
+                {/* Aspect Ratio Options for Videos */}
                 {!selectedFormat.isMp3 && (selectedFormat.format.hasVideo || selectedFormat.format.mimeType.includes('video')) && (
-                  <div className="space-y-3">
-                    <p className="text-[10px] font-black text-neutral-600 uppercase tracking-widest text-left px-2">Ajustar Relación de Aspecto</p>
+                  <div className="space-y-4 pt-4 border-t border-white/5">
+                    <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest text-left px-2">Ajustar Relación de Aspecto (Solo Video)</p>
                     <div className="grid grid-cols-3 gap-2">
                       {[
                         { id: 'original', label: 'Original', icon: <Film size={14} /> },
@@ -401,7 +402,7 @@ export default function App() {
                           <div className="aspect-video relative overflow-hidden bg-black">
                             {info.formats.some(f => f.hasVideo) ? (
                               <video
-                                src={info.formats.find(f => f.hasVideo)?.proxyUrl || info.formats.find(f => f.hasVideo)?.url}
+                                src={resolveMediaUrl(info.formats.find(f => f.hasVideo)?.proxyUrl || info.formats.find(f => f.hasVideo)?.url)}
                                 muted
                                 loop
                                 autoPlay
@@ -409,7 +410,7 @@ export default function App() {
                                 className="w-full h-full object-cover"
                               />
                             ) : (
-                              <img src={resolveImageUrl(info.thumbnail)} className="w-full h-full object-cover" />
+                              <img src={resolveMediaUrl(info.thumbnail)} className="w-full h-full object-cover" />
                             )}
                             <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-transparent to-transparent opacity-60" />
                           </div>
@@ -456,7 +457,7 @@ export default function App() {
                               <div className="grid grid-cols-2 gap-3">
                                 {info.formats.filter(f => f.mimeType.startsWith('image')).map((f, i) => (
                                   <button key={i} onClick={() => handleDownloadClick(f, false)} className="aspect-square bg-neutral-900 rounded-3xl border border-white/5 overflow-hidden group">
-                                    <img src={resolveImageUrl(f.proxyUrl || f.url)} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-all" />
+                                    <img src={resolveMediaUrl(f.proxyUrl || f.url)} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-all" />
                                   </button>
                                 ))}
                               </div>
@@ -500,7 +501,7 @@ export default function App() {
                       <div className="space-y-2">
                         {history.map(item => (
                           <div key={item.id} className="bg-neutral-900/80 border border-white/5 p-3 rounded-2xl flex gap-4 items-center">
-                            <img src={resolveImageUrl(item.thumbnail)} className="w-12 h-12 object-cover rounded-xl" />
+                            <img src={resolveMediaUrl(item.thumbnail)} className="w-12 h-12 object-cover rounded-xl" />
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-black text-white truncate">{item.title}</p>
                               <p className="text-[9px] text-neutral-500 font-bold uppercase">{item.platform}</p>

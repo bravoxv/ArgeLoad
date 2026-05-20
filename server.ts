@@ -120,20 +120,52 @@ async function startServer() {
             const ig = await ruhend.igdl(cleanUrl);
             if (!ig?.data) return null;
             const formats = ig.data.map((item: any, i: number) => {
-              const isVideo = item.url.includes('.mp4');
-              return { itag: 400 + i, mimeType: isVideo ? 'video/mp4' : 'image/jpeg', qualityLabel: isVideo ? `Video ${i + 1}` : `Imagen ${i + 1}`, hasVideo: isVideo, hasAudio: isVideo, container: isVideo ? 'mp4' : 'jpg', url: item.url, proxyUrl: `/api/proxy-image?url=${encodeURIComponent(item.url)}` };
+              const url = item.url;
+              // Improved video detection
+              const isVideo = url.includes('.mp4') || url.toLowerCase().includes('video') || !url.match(/\.(jpg|jpeg|png|webp|heic)/i);
+              return {
+                itag: 400 + i,
+                mimeType: isVideo ? 'video/mp4' : 'image/jpeg',
+                qualityLabel: isVideo ? `Video ${i + 1}` : `Imagen ${i + 1}`,
+                hasVideo: isVideo,
+                hasAudio: isVideo,
+                container: isVideo ? 'mp4' : 'jpg',
+                url: url,
+                proxyUrl: `/api/proxy-image?url=${encodeURIComponent(url)}`
+              };
             });
-            return { title: "Instagram Post", author: "Instagram User", thumbnail: formats[0]?.proxyUrl || formats[0]?.url, platform: 'instagram', formats };
+            return {
+              title: "Instagram Post",
+              author: "Instagram User",
+              thumbnail: formats[0]?.proxyUrl || formats[0]?.url,
+              platform: 'instagram',
+              formats
+            };
           })(),
           (async () => {
             const ig = await btch.igdl(cleanUrl);
             if (!ig?.result) return null;
             const formats = ig.result.map((item: any, i: number) => {
               const url = item.url || item.thumbnail;
-              const isVideo = url.includes('.mp4');
-              return { itag: 500 + i, mimeType: isVideo ? 'video/mp4' : 'image/jpeg', qualityLabel: isVideo ? `Video ${i + 1}` : `Imagen ${i + 1}`, hasVideo: isVideo, hasAudio: isVideo, container: isVideo ? 'mp4' : 'jpg', url: url, proxyUrl: `/api/proxy-image?url=${encodeURIComponent(url)}` };
+              const isVideo = url.includes('.mp4') || url.toLowerCase().includes('video') || !url.match(/\.(jpg|jpeg|png|webp|heic)/i);
+              return {
+                itag: 500 + i,
+                mimeType: isVideo ? 'video/mp4' : 'image/jpeg',
+                qualityLabel: isVideo ? `Video ${i + 1}` : `Imagen ${i + 1}`,
+                hasVideo: isVideo,
+                hasAudio: isVideo,
+                container: isVideo ? 'mp4' : 'jpg',
+                url: url,
+                proxyUrl: `/api/proxy-image?url=${encodeURIComponent(url)}`
+              };
             });
-            return { title: "Instagram Post", author: "Instagram User", thumbnail: formats[0]?.proxyUrl || formats[0]?.url, platform: 'instagram', formats };
+            return {
+              title: "Instagram Post",
+              author: "Instagram User",
+              thumbnail: formats[0]?.proxyUrl || formats[0]?.url,
+              platform: 'instagram',
+              formats
+            };
           })()
         ]);
         if (result) return res.json(result);
