@@ -1,4 +1,4 @@
-import { Download, Film, Music, Loader2, Video, ImageIcon, ClipboardIcon, X, History, Sparkles, Globe, Smartphone, Search, CheckCircle2 } from "lucide-react";
+import { Download, Film, Music, Loader2, Video, ImageIcon, ClipboardIcon, X, History, Sparkles, Globe, Smartphone, Monitor, Search, CheckCircle2 } from "lucide-react";
 import { Clipboard as CapacitorClipboard } from '@capacitor/clipboard';
 import { Capacitor } from '@capacitor/core';
 import React, { useState, useEffect } from "react";
@@ -236,11 +236,33 @@ export default function App() {
                   </span>
                 </div>
 
+                {!selectedFormat.isMp3 && (selectedFormat.format.hasVideo || selectedFormat.format.mimeType.includes('video')) && (
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black text-neutral-600 uppercase tracking-widest text-left px-2">Ajustar Relación de Aspecto</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'original', label: 'Original', icon: <Film size={14} /> },
+                        { id: '16_9', label: '16:9 Cine', icon: <Monitor size={14} /> },
+                        { id: '9_16', label: '9:16 Reel', icon: <Smartphone size={14} /> }
+                      ].map(opt => (
+                        <button
+                          key={opt.id}
+                          onClick={() => setVideoScale(opt.id as any)}
+                          className={`py-3 px-1 rounded-2xl transition-all flex flex-col items-center gap-1 border ${videoScale === opt.id ? 'bg-sky-600 border-sky-400 text-white shadow-lg' : 'bg-white/5 border-white/5 text-neutral-500 hover:bg-white/10'}`}
+                        >
+                          {opt.icon}
+                          <span className="text-[8px] font-black uppercase tracking-tighter">{opt.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <button
                   onClick={executeFinalDownload}
                   className="w-full py-6 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black rounded-3xl transition-all shadow-2xl shadow-sky-600/30 active:scale-95 flex items-center justify-center gap-4 text-sm tracking-[0.1em]"
                 >
-                  <Download size={20} className="animate-bounce" /> INICIAR DESCARGA AHORA
+                  <Download size={20} className="animate-bounce" /> {videoScale === 'original' ? 'DESCARGAR AHORA' : 'PROCESAR Y DESCARGAR'}
                 </button>
 
                 <p className="text-[9px] text-neutral-600 font-bold italic tracking-wide">
