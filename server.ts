@@ -258,29 +258,47 @@ async function startServer() {
         if (cobaltData && (cobaltData.url || cobaltData.picker)) {
           const formats = [];
           if (cobaltData.url) {
-            formats.push({ itag: 2000, mimeType: 'video/mp4', qualityLabel: 'Original', hasVideo: true, hasAudio: true, container: 'mp4', url: cobaltData.url });
+            const isVideo = cobaltData.url.includes('.mp4') || cobaltData.url.includes('video') || !cobaltData.url.includes('.jpg');
+            formats.push({ itag: 2000, mimeType: isVideo ? 'video/mp4' : 'image/jpeg', qualityLabel: 'Original', hasVideo: isVideo, hasAudio: true, container: isVideo ? 'mp4' : 'jpg', url: cobaltData.url });
           } else if (cobaltData.picker) {
             cobaltData.picker.forEach((p: any, i: number) => {
               formats.push({ itag: 2001 + i, mimeType: p.type === 'video' ? 'video/mp4' : 'image/jpeg', qualityLabel: `Item ${i + 1}`, hasVideo: p.type === 'video', hasAudio: true, container: p.type === 'video' ? 'mp4' : 'jpg', url: p.url });
             });
           }
-          return res.json({ title: "Media Extracted", author: "Cobalt", thumbnail: formats[0]?.url, platform: 'cobalt', formats });
+          return res.json({
+            title: "Contenido Detectado",
+            author: "Automático",
+            thumbnail: cobaltData.url || (cobaltData.picker ? cobaltData.picker[0].url : ""),
+            platform: 'cobalt',
+            formats
+          });
         }
       } catch (e) { }
 
 
-      // 13. Direct Link Detection (Extension based)
+      // 13. Direct Link Detection (Enhanced)
       const directMatch = cleanUrl.match(/\.(mp4|webm|mp3|m4a|wav|jpg|jpeg|png|gif|webp|mov|mkv)(\?|$)/i);
-      if (directMatch) {
-        const ext = directMatch[1].toLowerCase();
-        const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
-        const isAud = ['mp3', 'm4a', 'wav'].includes(ext);
+      if (directMatch || cleanUrl.includes('video_content') || cleanUrl.includes('media')) {
+        const extMatch = directMatch ? directMatch[1].toLowerCase() : 'mp4';
+        const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extMatch);
+        const isAud = ['mp3', 'm4a', 'wav'].includes(extMatch);
         const proxyUrl = isImg ? `/api/proxy-image?url=${encodeURIComponent(cleanUrl)}` : undefined;
 
         return res.json({
-          title: urlObj.pathname.split('/').pop()?.split('?')[0] || "Direct File",
-          author: "Direct Link", thumbnail: proxyUrl || "", platform: 'direct',
-          formats: [{ itag: 5000, mimeType: isImg ? `image/${ext}` : (isAud ? 'audio/mpeg' : 'video/mp4'), qualityLabel: 'Direct Link', hasVideo: !isImg && !isAud, hasAudio: !isImg, container: ext, url: cleanUrl, proxyUrl }]
+          title: urlObj.pathname.split('/').pop()?.split('?')[0] || "Archivo Directo",
+          author: "Vínculo Directo",
+          thumbnail: isImg ? proxyUrl : "",
+          platform: 'direct',
+          formats: [{
+            itag: 5000,
+            mimeType: isImg ? `image/${extMatch}` : (isAud ? 'audio/mpeg' : 'video/mp4'),
+            qualityLabel: 'Calidad Original',
+            hasVideo: !isImg && !isAud,
+            hasAudio: !isImg,
+            container: extMatch,
+            url: cleanUrl,
+            proxyUrl
+          }]
         });
       }
 

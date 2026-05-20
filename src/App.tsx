@@ -199,12 +199,23 @@ export default function App() {
               </button>
 
               <div className="glass-card rounded-[2.5rem] overflow-hidden p-6 text-center space-y-6">
-                <div className="w-32 h-32 mx-auto relative">
+                <div className="w-full aspect-video mx-auto relative group">
                   <div className="absolute inset-0 bg-sky-500 blur-2xl opacity-20 animate-pulse" />
-                  <img
-                    src={resolveImageUrl(info?.thumbnail)}
-                    className="w-full h-full object-cover rounded-3xl relative z-10 shadow-2xl border border-white/10"
-                  />
+                  {!selectedFormat.isMp3 && (selectedFormat.format.hasVideo || selectedFormat.format.mimeType.includes('video')) ? (
+                    <video
+                      src={selectedFormat.format.proxyUrl || selectedFormat.format.url}
+                      controls
+                      autoPlay
+                      muted
+                      playsInline
+                      className="w-full h-full object-cover rounded-3xl relative z-10 shadow-2xl border border-white/10 bg-black"
+                    />
+                  ) : (
+                    <img
+                      src={resolveImageUrl(info?.thumbnail)}
+                      className="w-32 h-32 mx-auto object-cover rounded-3xl relative z-10 shadow-2xl border border-white/10"
+                    />
+                  )}
                   <div className="absolute -bottom-2 -right-2 bg-sky-600 p-2 rounded-xl z-20 shadow-lg">
                     {selectedFormat.isMp3 ? <Music size={16} /> : <Film size={16} />}
                   </div>
@@ -212,7 +223,7 @@ export default function App() {
 
                 <div>
                   <h2 className="text-xl font-black text-white leading-tight mb-2 line-clamp-2">{info?.title}</h2>
-                  <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-[0.2em]">{info?.platform} • {selectedFormat.isMp3 ? 'Audio MP3' : selectedFormat.format.qualityLabel}</p>
+                  <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-[0.2em]">{info?.platform} • {selectedFormat.isMp3 ? 'Audio MP3' : (selectedFormat.format.qualityLabel || 'Video')}</p>
                 </div>
 
                 <div className="bg-white/5 rounded-2xl p-4 flex items-center justify-between">
@@ -365,8 +376,19 @@ export default function App() {
                         className="space-y-6"
                       >
                         <div className="glass-card rounded-[2.5rem] overflow-hidden relative group">
-                          <div className="aspect-video relative overflow-hidden">
-                            <img src={resolveImageUrl(info.thumbnail)} className="w-full h-full object-cover" />
+                          <div className="aspect-video relative overflow-hidden bg-black">
+                            {info.formats.some(f => f.hasVideo) ? (
+                              <video
+                                src={info.formats.find(f => f.hasVideo)?.proxyUrl || info.formats.find(f => f.hasVideo)?.url}
+                                muted
+                                loop
+                                autoPlay
+                                playsInline
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <img src={resolveImageUrl(info.thumbnail)} className="w-full h-full object-cover" />
+                            )}
                             <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-transparent to-transparent opacity-60" />
                           </div>
                           <div className="p-6">
