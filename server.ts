@@ -392,6 +392,9 @@ async function startServer() {
         if (start || end || scale) {
           if (!fetchRes.body) return res.status(500).send("No source body");
           const nodeStream = Readable.fromWeb(fetchRes.body as any);
+          const tempFilename = `proc_${Date.now()}_${Math.random().toString(36).substring(7)}.mp4`;
+          const tempPath = path.join(__dirname, 'uploads', tempFilename);
+
           let command = ffmpeg(nodeStream)
             .toFormat('mp4')
             .videoCodec('libx264')
@@ -400,7 +403,7 @@ async function startServer() {
               '-preset', 'ultrafast',
               '-crf', '23',
               '-pix_fmt', 'yuv420p',
-              '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+              '-movflags', '+faststart',
               '-tune', 'fastdecode'
             ]);
 
@@ -416,10 +419,19 @@ async function startServer() {
 
           command.on('error', (err) => {
             console.error("FFmpeg Video Error:", err.message);
+            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
             if (!res.headersSent) res.status(500).send("Processing error: " + err.message);
           });
 
-          return command.pipe(res, { end: true });
+          command.on('end', () => {
+            res.download(tempPath, filename, (err) => {
+              if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+              if (err && !res.headersSent) console.error("Download Error:", err);
+            });
+          });
+
+          command.save(tempPath);
+          return;
         }
 
         if (fetchRes.body) {
