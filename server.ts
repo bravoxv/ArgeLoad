@@ -386,9 +386,21 @@ async function startServer() {
 
         if (start || end || scale) {
           const nodeStream = Readable.fromWeb(fetchRes.body as any);
-          let command = ffmpeg(nodeStream).toFormat('mp4').outputOptions(['-preset', 'ultrafast', '-crf', '28', '-movflags', 'frag_keyframe+empty_moov']);
+          let command = ffmpeg(nodeStream)
+            .toFormat('mp4')
+            .videoCodec('libx264')
+            .audioCodec('aac')
+            .outputOptions([
+              '-preset', 'ultrafast',
+              '-crf', '23',
+              '-pix_fmt', 'yuv420p',
+              '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+              '-tune', 'fastdecode'
+            ]);
+
           if (scale === '16_9') command = command.videoFilters("crop='trunc(min(iw,ih*16/9)/2)*2':'trunc(min(ih,iw*9/16)/2)*2'");
           else if (scale === '9_16') command = command.videoFilters("scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black");
+          
           if (start) command = command.setStartTime(String(start));
           if (end) {
             const getSec = (t: string) => t.split(':').reverse().reduce((acc, val, i) => acc + (Number(val) * Math.pow(60, i)), 0);
