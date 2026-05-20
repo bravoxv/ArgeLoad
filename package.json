@@ -24,6 +24,7 @@
     "@capacitor/clipboard": "^7.0.4",
     "@capacitor/core": "^7.0.0",
     "@distube/ytdl-core": "^4.16.12",
+    "@emotion/is-prop-valid": "^1.4.0",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@google/genai": "^1.29.0",
