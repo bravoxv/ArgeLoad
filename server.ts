@@ -343,6 +343,23 @@ async function startServer() {
   });
 
   const progressMap = new Map<string, number>();
+  // Cache: "url|scale" -> filepath
+  const scaleCache = new Map<string, string>();
+
+  // Clean up old cache entries every 30 minutes
+  setInterval(() => {
+    for (const [key, filePath] of scaleCache.entries()) {
+      if (fs.existsSync(filePath)) {
+        const age = Date.now() - fs.statSync(filePath).mtimeMs;
+        if (age > 30 * 60 * 1000) {
+          fs.unlinkSync(filePath);
+          scaleCache.delete(key);
+        }
+      } else {
+        scaleCache.delete(key);
+      }
+    }
+  }, 10 * 60 * 1000);
 
   // Progress API
   app.get("/api/progress/:taskId", (req, res) => {
@@ -351,12 +368,29 @@ async function startServer() {
   });
 
   // Proxy Download
-  app.get(["/api/download", "/api/download/:forcedFilename"], async (req, res) => {
+  app.get(["/api/download", "/api/download/:forcedFilename", "/api/v2/download/:forcedFilename"], async (req, res) => {
     try {
       const { url, ext, title, mp3, start, end, scale, taskId } = req.query;
       if (!url || typeof url !== 'string') return res.status(400).send("Missing URL");
 
       const tid = typeof taskId === 'string' ? taskId : null;
+
+      // --- CACHE HIT: Serve scaled video directly if already processed ---
+      if (scale && typeof url === 'string') {
+        const cacheKey = `${url}|${scale}`;
+        const cachedPath = scaleCache.get(cacheKey);
+        if (cachedPath && fs.existsSync(cachedPath)) {
+          console.log(`[CACHE HIT] Serving ${scale} for cached video`);
+          if (tid) progressMap.set(tid, 100);
+          res.setHeader('Content-Type', 'video/mp4');
+          res.setHeader('Content-Length', fs.statSync(cachedPath).size);
+          res.setHeader('Accept-Ranges', 'bytes');
+          if (title) res.setHeader('Content-Disposition', `inline; filename="${String(title).replace(/[^a-zA-Z0-9._]/g, '_')}.mp4"`);
+          fs.createReadStream(cachedPath).pipe(res);
+          return;
+        }
+      }
+
       if (tid) progressMap.set(tid, 0);
 
       const fetchHeaders: any = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' };
@@ -429,30 +463,27 @@ async function startServer() {
           } else {
             command = command.toFormat('mp4')
               .videoCodec('libx264')
-              .audioCodec('aac')
+              .audioCodec('copy') // Much faster: don't re-encode audio
               .outputOptions([
-                '-preset', 'ultrafast', // Much faster than 'faster'
-                '-crf', '32',           // Slightly lower quality for higher speed
+                '-preset', 'ultrafast',
+                '-crf', '32',
                 '-pix_fmt', 'yuv420p',
-                isInline ? '-movflags' : '-movflags', isInline ? 'frag_keyframe+empty_moov+default_base_moof' : '+faststart',
-                '-profile:v', 'main',
-                '-level', '4.0',
-                '-colorspace', 'bt709',
-                '-color_trc', 'bt709',
-                '-color_primaries', 'bt709'
+                '-tune', 'zerolatency', // Optimize for streaming speed
+                '-threads', '0',        // Use all available CPUs
+                '-movflags', isInline ? 'frag_keyframe+empty_moov+default_base_moof' : '+faststart'
               ]);
           }
 
           if (scale === '16_9') {
             command = command.videoFilters([
-              "scale='if(gt(iw/ih,16/9),-2,1280)':'if(gt(iw/ih,16/9),720,-2)':force_original_aspect_ratio=increase",
-              "crop=1280:720",
+              "scale='if(gt(iw/ih,16/9),-2,854)':'if(gt(iw/ih,16/9),480,-2)':force_original_aspect_ratio=increase",
+              "crop=854:480",
               "setsar=1"
             ]);
           } else if (scale === '9_16') {
             command = command.videoFilters([
-              "scale=720:1280:force_original_aspect_ratio=decrease",
-              "pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=black",
+              "scale=480:854:force_original_aspect_ratio=decrease",
+              "pad=480:854:(ow-iw)/2:(oh-ih)/2:color=black",
               "setsar=1",
               "scale=trunc(iw/2)*2:trunc(ih/2)*2"
             ]);
@@ -499,19 +530,37 @@ async function startServer() {
             if (!res.headersSent) res.status(500).send("Processing error");
           });
 
-          command.on('end', () => {
-            if (tid) progressMap.delete(tid);
-          });
-
-          if (isInline) {
-            // REAL-TIME STREAMING
+          if (scale && !isImage && !isAudio) {
+            // Always write scaled videos to a file first, then serve (enables caching + range support)
+            const cacheKey = `${url}|${scale}`;
+            command.on('end', () => {
+              if (tid) {
+                progressMap.set(tid, 100);
+                setTimeout(() => progressMap.delete(tid), 5000);
+              }
+              // Cache for future requests
+              scaleCache.set(cacheKey, tempPath);
+              if (!res.headersSent) {
+                const stat = fs.statSync(tempPath);
+                res.setHeader('Content-Type', 'video/mp4');
+                res.setHeader('Content-Length', stat.size);
+                res.setHeader('Accept-Ranges', 'bytes');
+                fs.createReadStream(tempPath).pipe(res).on('finish', () => {
+                  // Keep file in cache, don't delete
+                });
+              }
+            });
+            command.save(tempPath);
+          } else if (isInline) {
+            // Non-scale inline: real-time stream
+            command.on('end', () => { if (tid) progressMap.delete(tid); });
             command.pipe(res, { end: true });
           } else {
-            // TRADITIONAL DOWNLOAD
+            // Traditional download
             command.on('end', () => {
-              res.download(tempPath, filename, (err) => {
+              if (tid) progressMap.delete(tid);
+              res.download(tempPath, filename, () => {
                 if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-                if (err && !res.headersSent) console.error("Download Error:", err);
               });
             });
             command.save(tempPath);

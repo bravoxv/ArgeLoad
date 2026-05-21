@@ -199,7 +199,7 @@ export default function App() {
     if (videoScale === 'original') return resolveMediaUrl(format.proxyUrl || format.url);
 
     const safeTitle = (info.title).replace(/[^a-zA-Z0-9]/g, "_");
-    let url = `${API_BASE_URL}/api/download/${safeTitle}.mp4?url=${encodeURIComponent(format.url)}&ext=mp4&scale=${videoScale}&inline=true`;
+    let url = `${API_BASE_URL}/api/v2/download/${safeTitle}.mp4?url=${encodeURIComponent(format.url)}&ext=mp4&scale=${videoScale}&inline=true`;
     if (currentTaskId) url += `&taskId=${currentTaskId}`;
     return url;
   };
@@ -212,7 +212,7 @@ export default function App() {
     const targetExt = isMp3 ? 'mp3' : format.container || 'mp4';
     const finalFilename = `${safeTitle}.${targetExt}`;
 
-    let downloadUrl = `${API_BASE_URL}/api/download/${encodeURIComponent(finalFilename)}?url=${encodeURIComponent(format.url)}&ext=${targetExt}&title=${encodeURIComponent(info.title)}&inline=true`;
+    let downloadUrl = `${API_BASE_URL}/api/v2/download/${encodeURIComponent(finalFilename)}?url=${encodeURIComponent(format.url)}&ext=${targetExt}&title=${encodeURIComponent(info.title)}&inline=true`;
 
     if (isMp3) {
       downloadUrl += `&mp3=true`;
@@ -652,27 +652,31 @@ export default function App() {
               </button>
             </div>
 
-            <div className="w-full h-full flex items-center justify-center p-4">
+            <div className={`w-full h-full flex items-center justify-center p-4 relative`}>
+              {videoScale !== 'original' && previewProgress < 100 && (
+                <div className="absolute top-0 left-0 right-0 z-[120] pointer-events-none">
+                  <div className="h-1 bg-white/20 w-full overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${previewProgress}%` }}
+                      className="h-full bg-sky-500 shadow-[0_0_10px_#0ea5e9]"
+                    />
+                  </div>
+                  <div className="p-4 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent">
+                    <span className="text-[10px] font-black text-white uppercase tracking-[0.2em] animate-pulse">Exportando composición...</span>
+                    <span className="text-sm font-black text-white">{previewProgress}%</span>
+                  </div>
+                </div>
+              )}
+
               {!selectedFormat.isMp3 && (selectedFormat.format.hasVideo || selectedFormat.format.mimeType.includes('video')) ? (
-                <div className="relative group">
-                  {videoScale !== 'original' && (
-                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md transition-opacity duration-1000 select-none pointer-events-none" style={{ opacity: previewProgress === 100 ? 0 : 1 }}>
-                      <div className="w-24 h-24 relative mb-4">
-                        <svg className="w-full h-full -rotate-90">
-                          <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-white/10" />
-                          <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" strokeDasharray={251.2} strokeDashoffset={251.2 - (251.2 * previewProgress / 100)} className="text-sky-500 transition-all duration-500 ease-out" />
-                        </svg>
-                        <div className="absolute inset-0 flex items-center justify-center font-black text-xl text-white">{previewProgress}%</div>
-                      </div>
-                      <p className="text-[10px] font-black text-sky-400 uppercase tracking-[0.2em] animate-pulse">Exportando composición...</p>
-                    </div>
-                  )}
+                <div className="relative w-full h-full flex items-center justify-center">
                   <video
                     src={generatePreviewUrl()}
                     controls
                     autoPlay
                     playsInline
-                    className="max-w-full max-h-[80vh] shadow-2xl rounded-xl"
+                    className="max-w-full max-h-[75vh] shadow-2xl rounded-xl z-10"
                   />
                 </div>
               ) : selectedFormat.isMp3 ? (
