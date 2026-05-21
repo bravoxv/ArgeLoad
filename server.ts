@@ -460,10 +460,18 @@ async function startServer() {
           });
 
           command.on('end', () => {
-            res.download(tempPath, filename, (err) => {
-              if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-              if (err && !res.headersSent) console.error("Download Error:", err);
-            });
+            const isInline = req.query.inline === 'true';
+            if (isInline) {
+              res.sendFile(tempPath, (err) => {
+                if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+                if (err && !res.headersSent) console.error("Inline View Error:", err);
+              });
+            } else {
+              res.download(tempPath, filename, (err) => {
+                if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+                if (err && !res.headersSent) console.error("Download Error:", err);
+              });
+            }
           });
 
           command.save(tempPath);

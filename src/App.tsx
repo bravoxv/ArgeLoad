@@ -64,6 +64,7 @@ export default function App() {
   const [videoScale, setVideoScale] = useState<'original' | '16_9' | '9_16'>('original');
 
   const [view, setView] = useState<'home' | 'download'>('home');
+  const [loadingPreview, setLoadingPreview] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState<{ format: Format; isMp3: boolean } | null>(null);
 
   useEffect(() => {
@@ -199,22 +200,51 @@ export default function App() {
               </button>
 
               <div className="glass-card rounded-[2.5rem] overflow-hidden p-6 text-center space-y-6">
-                <div className="w-full aspect-video mx-auto relative group">
+                <div className="w-full aspect-video mx-auto relative group bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/10">
                   <div className="absolute inset-0 bg-sky-500 blur-2xl opacity-20 animate-pulse" />
+
+                  {loadingPreview && (
+                    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
+                      <Loader2 className="animate-spin text-sky-400 mb-2" size={32} />
+                      <span className="text-[10px] font-black text-sky-400 uppercase tracking-widest">Procesando Aspecto...</span>
+                    </div>
+                  )}
+
                   {!selectedFormat.isMp3 && (selectedFormat.format.hasVideo || selectedFormat.format.mimeType.includes('video')) ? (
                     <video
-                      src={resolveMediaUrl(selectedFormat.format.proxyUrl || selectedFormat.format.url)}
+                      key={videoScale} // Force reload on scale change
+                      src={(() => {
+                        if (videoScale === 'original') return resolveMediaUrl(selectedFormat.format.proxyUrl || selectedFormat.format.url);
+                        const safeTitle = (info?.title || 'video').replace(/[^a-zA-Z0-9]/g, "_");
+                        return `${API_BASE_URL}/api/download/${safeTitle}.mp4?url=${encodeURIComponent(selectedFormat.format.url)}&ext=mp4&scale=${videoScale}&inline=true`;
+                      })()}
                       controls
                       autoPlay
                       muted
+                      onLoadStart={() => videoScale !== 'original' && setLoadingPreview(true)}
+                      onCanPlay={() => setLoadingPreview(false)}
                       playsInline
-                      className="w-full h-full object-cover rounded-3xl relative z-10 shadow-2xl border border-white/10 bg-black"
+                      className="w-full h-full object-contain relative z-10"
                     />
                   ) : (
-                    <img
-                      src={resolveMediaUrl(info?.thumbnail)}
-                      className="w-32 h-32 mx-auto object-cover rounded-3xl relative z-10 shadow-2xl border border-white/10"
-                    />
+                    <div className="w-full h-full flex items-center justify-center p-4">
+                      {loadingPreview && (
+                        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm rounded-3xl">
+                          <Loader2 className="animate-spin text-sky-400 mb-2" size={32} />
+                        </div>
+                      )}
+                      <img
+                        key={videoScale}
+                        src={(() => {
+                          if (videoScale === 'original' || !selectedFormat.format.mimeType.includes('image')) return resolveMediaUrl(info?.thumbnail);
+                          const safeTitle = (info?.title || 'video').replace(/[^a-zA-Z0-9]/g, "_");
+                          return `${API_BASE_URL}/api/download/${safeTitle}.jpg?url=${encodeURIComponent(selectedFormat.format.url)}&ext=jpg&scale=${videoScale}&inline=true`;
+                        })()}
+                        onLoad={() => setLoadingPreview(false)}
+                        onLoadStart={() => videoScale !== 'original' && setLoadingPreview(true)}
+                        className="max-w-full max-h-full object-contain relative z-10 shadow-2xl rounded-2xl border border-white/5"
+                      />
+                    </div>
                   )}
                   <div className="absolute -bottom-2 -right-2 bg-sky-600 p-2 rounded-xl z-20 shadow-lg">
                     {selectedFormat.isMp3 ? <Music size={16} /> : <Film size={16} />}
@@ -523,9 +553,9 @@ export default function App() {
         <footer className="mt-12 text-center text-[9px] font-bold text-neutral-600 uppercase tracking-widest space-y-2">
           <p>© 2026 ArgeLoad Media Suite</p>
           <div className="flex justify-center gap-4 text-neutral-800">
-            <span>v3.5.1-stable</span>
+            <span>v3.5.2-stable</span>
             <span>•</span>
-            <span>Optimized Media Engine</span>
+            <span>Live Media Preview</span>
           </div>
         </footer>
       </main>
