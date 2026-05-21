@@ -357,17 +357,22 @@ async function startServer() {
       }
 
       const fetchRes = await fetch(url, { headers: fetchHeaders });
+      const isInline = req.query.inline === 'true';
       const targetExt = mp3 === 'true' ? 'mp3' : (ext || 'mp4');
 
       // Sanitizar el título para el nombre del archivo
       let safeTitle = (title as string || 'ArgeLoad_Media')
         .trim()
-        .replace(/[/\\?%*:|"<>]/g, '_') // Caracteres no válidos en Windows/Unix
-        .replace(/\s+/g, '_'); // Reemplazar espacios por guiones bajos
+        .replace(/[/\\?%*:|"<>]/g, '_')
+        .replace(/\s+/g, '_');
 
       let filename = `${safeTitle}.${targetExt}`;
 
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      if (isInline) {
+        res.setHeader('Content-Disposition', 'inline');
+      } else {
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      }
       res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
 
       if (mp3 === 'true') {
@@ -405,13 +410,10 @@ async function startServer() {
           let command = ffmpeg(nodeStream);
 
           if (isImage) {
-            // Processing for IMAGES - Keep as image format
             command = command.toFormat('mjpeg').outputOptions(['-vframes', '1']);
           } else if (isAudio) {
-            // Processing for AUDIO
             command = command.toFormat('mp3').audioBitrate('128k');
           } else {
-            // Processing for VIDEO - Optimized for size and YouTube
             command = command.toFormat('mp4')
               .videoCodec('libx264')
               .audioCodec('aac')
@@ -428,7 +430,6 @@ async function startServer() {
               ]);
           }
 
-          // Apply Scaling/Cropping logic
           if (scale === '16_9') {
             command = command.videoFilters([
               "scale='if(gt(iw/ih,16/9),-2,1280)':'if(gt(iw/ih,16/9),720,-2)':force_original_aspect_ratio=increase",
@@ -460,7 +461,6 @@ async function startServer() {
           });
 
           command.on('end', () => {
-            const isInline = req.query.inline === 'true';
             if (isInline) {
               res.sendFile(tempPath, (err) => {
                 if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);

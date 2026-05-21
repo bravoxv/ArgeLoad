@@ -172,7 +172,7 @@ export default function App() {
     const targetExt = isMp3 ? 'mp3' : format.container || 'mp4';
     const finalFilename = `${safeTitle}.${targetExt}`;
 
-    let downloadUrl = `${API_BASE_URL}/api/download/${encodeURIComponent(finalFilename)}?url=${encodeURIComponent(format.url)}&ext=${targetExt}&title=${encodeURIComponent(info.title)}`;
+    let downloadUrl = `${API_BASE_URL}/api/download/${encodeURIComponent(finalFilename)}?url=${encodeURIComponent(format.url)}&ext=${targetExt}&title=${encodeURIComponent(info.title)}&inline=true`;
     if (isMp3) downloadUrl += `&mp3=true`;
     else if (format.hasVideo && videoScale !== 'original') downloadUrl += `&scale=${videoScale}`;
 
@@ -293,7 +293,7 @@ export default function App() {
                   onClick={executeFinalDownload}
                   className="w-full py-6 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black rounded-3xl transition-all shadow-2xl shadow-sky-600/30 active:scale-95 flex items-center justify-center gap-4 text-sm tracking-[0.1em]"
                 >
-                  <Download size={20} className="animate-bounce" /> {videoScale === 'original' ? 'DESCARGAR AHORA' : 'PROCESAR Y DESCARGAR'}
+                  <Download size={20} className="animate-bounce" /> {videoScale === 'original' ? 'ABRIR PARA GUARDAR' : 'PROCESAR Y ABRIR'}
                 </button>
 
                 <p className="text-[9px] text-neutral-600 font-bold italic tracking-wide">
@@ -553,9 +553,9 @@ export default function App() {
         <footer className="mt-12 text-center text-[9px] font-bold text-neutral-600 uppercase tracking-widest space-y-2">
           <p>© 2026 ArgeLoad Media Suite</p>
           <div className="flex justify-center gap-4 text-neutral-800">
-            <span>v3.5.2-stable</span>
+            <span>v3.5.3-stable</span>
             <span>•</span>
-            <span>Live Media Preview</span>
+            <span>Production Ready</span>
           </div>
         </footer>
       </main>
