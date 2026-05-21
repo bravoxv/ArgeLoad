@@ -160,9 +160,48 @@ export default function App() {
     }
   };
 
+  const [previewProgress, setPreviewProgress] = useState(0);
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+
+  const stopPolling = () => {
+    setCurrentTaskId(null);
+    setPreviewProgress(0);
+  };
+
+  useEffect(() => {
+    let interval: any;
+    if (isFullscreen && currentTaskId && videoScale !== 'original') {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/progress/${currentTaskId}`);
+          const data = await res.json();
+          if (data.progress > 0) {
+            setPreviewProgress(data.progress);
+            if (data.progress >= 100) clearInterval(interval);
+          }
+        } catch (e) { }
+      }, 1000);
+    } else {
+      setPreviewProgress(0);
+    }
+    return () => clearInterval(interval);
+  }, [isFullscreen, currentTaskId, videoScale]);
+
   const handleDownloadClick = (format: Format, isMp3: boolean) => {
     setSelectedFormat({ format, isMp3 });
+    setVideoScale('original');
     setView('download');
+  };
+
+  const generatePreviewUrl = () => {
+    if (!selectedFormat || !info) return "";
+    const { format } = selectedFormat;
+    if (videoScale === 'original') return resolveMediaUrl(format.proxyUrl || format.url);
+
+    const safeTitle = (info.title).replace(/[^a-zA-Z0-9]/g, "_");
+    let url = `${API_BASE_URL}/api/download/${safeTitle}.mp4?url=${encodeURIComponent(format.url)}&ext=mp4&scale=${videoScale}&inline=true`;
+    if (currentTaskId) url += `&taskId=${currentTaskId}`;
+    return url;
   };
 
   const executeFinalDownload = () => {
@@ -174,8 +213,14 @@ export default function App() {
     const finalFilename = `${safeTitle}.${targetExt}`;
 
     let downloadUrl = `${API_BASE_URL}/api/download/${encodeURIComponent(finalFilename)}?url=${encodeURIComponent(format.url)}&ext=${targetExt}&title=${encodeURIComponent(info.title)}&inline=true`;
-    if (isMp3) downloadUrl += `&mp3=true`;
-    else if (format.hasVideo && videoScale !== 'original') downloadUrl += `&scale=${videoScale}`;
+
+    if (isMp3) {
+      downloadUrl += `&mp3=true`;
+    } else if (format.hasVideo && videoScale !== 'original') {
+      const taskId = `task_${Date.now()}`;
+      setCurrentTaskId(taskId);
+      downloadUrl += `&scale=${videoScale}&taskId=${taskId}`;
+    }
 
     addToHistory(info.title, downloadUrl, info.platform, info.thumbnail);
     setIsFullscreen(true);
@@ -208,43 +253,33 @@ export default function App() {
                     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
                       <Loader2 className="animate-spin text-sky-400 mb-2" size={32} />
                       <span className="text-[10px] font-black text-sky-400 uppercase tracking-widest">Procesando Aspecto...</span>
+                      {previewProgress > 0 && <span className="text-xl font-black text-white mt-1">{previewProgress}%</span>}
                     </div>
                   )}
 
                   {!selectedFormat.isMp3 && (selectedFormat.format.hasVideo || selectedFormat.format.mimeType.includes('video')) ? (
-                    <video
-                      key={videoScale} // Force reload on scale change
-                      src={(() => {
-                        if (videoScale === 'original') return resolveMediaUrl(selectedFormat.format.proxyUrl || selectedFormat.format.url);
-                        const safeTitle = (info?.title || 'video').replace(/[^a-zA-Z0-9]/g, "_");
-                        return `${API_BASE_URL}/api/download/${safeTitle}.mp4?url=${encodeURIComponent(selectedFormat.format.url)}&ext=mp4&scale=${videoScale}&inline=true`;
-                      })()}
-                      controls
-                      autoPlay
-                      muted
-                      onLoadStart={() => videoScale !== 'original' && setLoadingPreview(true)}
-                      onCanPlay={() => setLoadingPreview(false)}
-                      playsInline
-                      className="w-full h-full object-contain relative z-10"
-                    />
+                    <div className={`w-full h-full flex items-center justify-center bg-black overflow-hidden transition-all duration-500 ${videoScale === '16_9' ? 'aspect-video' : videoScale === '9_16' ? 'aspect-[9/16]' : 'aspect-video'
+                      }`}>
+                      <video
+                        src={resolveMediaUrl(selectedFormat.format.proxyUrl || selectedFormat.format.url)}
+                        controls
+                        autoPlay
+                        muted
+                        playsInline
+                        className={`w-full h-full transition-all duration-500 ${videoScale === '16_9' ? 'object-cover' : videoScale === '9_16' ? 'object-contain' : 'object-contain'
+                          }`}
+                      />
+                    </div>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center p-4">
-                      {loadingPreview && (
-                        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm rounded-3xl">
-                          <Loader2 className="animate-spin text-sky-400 mb-2" size={32} />
-                        </div>
-                      )}
-                      <img
-                        key={videoScale}
-                        src={(() => {
-                          if (videoScale === 'original' || !selectedFormat.format.mimeType.includes('image')) return resolveMediaUrl(info?.thumbnail);
-                          const safeTitle = (info?.title || 'video').replace(/[^a-zA-Z0-9]/g, "_");
-                          return `${API_BASE_URL}/api/download/${safeTitle}.jpg?url=${encodeURIComponent(selectedFormat.format.url)}&ext=jpg&scale=${videoScale}&inline=true`;
-                        })()}
-                        onLoad={() => setLoadingPreview(false)}
-                        onLoadStart={() => videoScale !== 'original' && setLoadingPreview(true)}
-                        className="max-w-full max-h-full object-contain relative z-10 shadow-2xl rounded-2xl border border-white/5"
-                      />
+                      <div className={`transition-all duration-500 overflow-hidden shadow-2xl rounded-2xl border border-white/5 ${videoScale === '16_9' ? 'aspect-video' : videoScale === '9_16' ? 'aspect-[9/16]' : ''
+                        }`}>
+                        <img
+                          src={resolveMediaUrl(info?.thumbnail)}
+                          className={`w-full h-full transition-all duration-500 ${videoScale === '16_9' ? 'object-cover' : videoScale === '9_16' ? 'object-contain bg-black' : 'object-contain'
+                            }`}
+                        />
+                      </div>
                     </div>
                   )}
                   <div className="absolute -bottom-2 -right-2 bg-sky-600 p-2 rounded-xl z-20 shadow-lg">
@@ -292,9 +327,15 @@ export default function App() {
 
                 <button
                   onClick={executeFinalDownload}
-                  className="w-full py-6 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black rounded-3xl transition-all shadow-2xl shadow-sky-600/30 active:scale-95 flex items-center justify-center gap-4 text-sm tracking-[0.1em]"
+                  disabled={loadingPreview}
+                  className={`w-full py-6 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black rounded-3xl transition-all shadow-2xl shadow-sky-600/30 active:scale-95 flex items-center justify-center gap-4 text-sm tracking-[0.1em] ${loadingPreview ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
                 >
-                  <Download size={20} className="animate-bounce" /> {videoScale === 'original' ? 'ABRIR PARA GUARDAR' : 'PROCESAR Y ABRIR'}
+                  {loadingPreview ? (
+                    <Loader2 className="animate-spin" size={20} />
+                  ) : (
+                    <Download size={20} className={videoScale !== 'original' ? "animate-bounce" : ""} />
+                  )}
+                  {loadingPreview ? 'ESPERANDO PROCESAMIENTO...' : (videoScale === 'original' ? 'ABRIR PARA GUARDAR' : 'PROCESAR Y ABRIR')}
                 </button>
 
                 <p className="text-[9px] text-neutral-600 font-bold italic tracking-wide">
@@ -455,57 +496,80 @@ export default function App() {
                         </div>
 
                         <div className="space-y-6">
-                          {/* Audio Section */}
-                          <div className="relative group">
-                            <div className="absolute inset-0 bg-gradient-to-r from-indigo-600/20 to-purple-600/20 blur-xl opacity-50 transition-opacity" />
-                            <div className="relative bg-neutral-900 border border-white/10 p-5 rounded-[2.5rem] shadow-2xl">
-                              <div className="flex items-center justify-between mb-4 px-2">
-                                <div className="flex items-center gap-2">
+                          {/* Botones de Descarga Side-by-Side */}
+                          <div className="grid grid-cols-2 gap-4">
+                            {/* MP3 Column */}
+                            <div className="relative group">
+                              <div className="absolute inset-0 bg-gradient-to-r from-indigo-600/20 to-purple-600/20 blur-xl opacity-50 transition-opacity" />
+                              <div className="relative bg-neutral-900 border border-white/10 p-4 rounded-[2.5rem] shadow-2xl h-full flex flex-col justify-between">
+                                <div className="flex items-center gap-2 mb-3 px-1">
                                   <div className="w-8 h-8 bg-indigo-500/10 rounded-xl flex items-center justify-center">
                                     <Music size={16} className="text-indigo-400" />
                                   </div>
-                                  <h3 className="text-[10px] font-black text-white uppercase tracking-widest">Extraer Sonido</h3>
+                                  <h3 className="text-[9px] font-black text-white uppercase tracking-widest">Audio</h3>
                                 </div>
-                                <span className="px-2 py-0.5 bg-indigo-500 text-[8px] font-black rounded-full text-white">MP3 HQ</span>
+                                <button
+                                  onClick={() => handleDownloadClick(info.formats[0], true)}
+                                  className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl transition-all font-black text-[10px] uppercase flex flex-col items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-95"
+                                >
+                                  <Download size={18} />
+                                  <span>MP3 HQ</span>
+                                </button>
                               </div>
-                              <button
-                                onClick={() => handleDownloadClick(info.formats[0], true)}
-                                className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl transition-all font-black text-xs uppercase flex items-center justify-center gap-3 shadow-lg shadow-indigo-600/20 active:scale-95"
-                              >
-                                DESCARGAR MP3 <Download size={16} />
-                              </button>
+                            </div>
+
+                            {/* Video Column */}
+                            <div className="relative group">
+                              <div className="absolute inset-0 bg-gradient-to-r from-sky-600/20 to-indigo-600/20 blur-xl opacity-50 transition-opacity" />
+                              <div className="relative bg-neutral-900 border border-white/10 p-4 rounded-[2.5rem] shadow-2xl h-full flex flex-col justify-between">
+                                <div className="flex items-center gap-2 mb-3 px-1">
+                                  <div className="w-8 h-8 bg-sky-500/10 rounded-xl flex items-center justify-center">
+                                    <Video size={16} className="text-sky-400" />
+                                  </div>
+                                  <h3 className="text-[9px] font-black text-white uppercase tracking-widest">Video</h3>
+                                </div>
+                                <button
+                                  onClick={() => handleDownloadClick(info.formats.find(f => f.hasVideo) || info.formats[0], false)}
+                                  className="w-full py-4 bg-gradient-to-r from-sky-600 to-indigo-600 text-white rounded-2xl transition-all font-black text-[10px] uppercase flex flex-col items-center justify-center gap-2 shadow-lg shadow-sky-600/20 active:scale-95"
+                                >
+                                  <Download size={18} />
+                                  <span>MP4 VIDEO</span>
+                                </button>
+                              </div>
                             </div>
                           </div>
 
-                          {/* Video Section */}
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between px-4">
-                              <h3 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">Opciones de Video</h3>
-                              <div className="h-px flex-1 bg-white/5 mx-4" />
-                            </div>
-                            <div className="grid gap-2">
-                              {info.formats.filter(f => f.hasVideo).map((f, i) => (
-                                <button
-                                  key={i}
-                                  onClick={() => handleDownloadClick(f, false)}
-                                  className="group w-full flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-[2rem] hover:bg-white/10 active:bg-sky-600/20 transition-all border-l-4 border-l-transparent hover:border-l-sky-500"
-                                >
-                                  <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-sky-500/10 rounded-2xl flex items-center justify-center text-sky-400 group-hover:scale-110 transition-transform">
-                                      <Film size={20} />
+                          {/* Seccion de Calidades Detalladas (opcional) */}
+                          {info.formats.filter(f => f.hasVideo).length > 1 && (
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between px-4">
+                                <h3 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">Otras Calidades</h3>
+                                <div className="h-px flex-1 bg-white/5 mx-4" />
+                              </div>
+                              <div className="grid gap-2">
+                                {info.formats.filter(f => f.hasVideo).slice(1).map((f, i) => (
+                                  <button
+                                    key={i}
+                                    onClick={() => handleDownloadClick(f, false)}
+                                    className="group w-full flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-[2rem] hover:bg-white/10 active:bg-sky-600/20 transition-all border-l-4 border-l-transparent hover:border-l-sky-500"
+                                  >
+                                    <div className="flex items-center gap-4">
+                                      <div className="w-10 h-10 bg-sky-500/10 rounded-2xl flex items-center justify-center text-sky-400 group-hover:scale-110 transition-transform">
+                                        <Film size={20} />
+                                      </div>
+                                      <div className="text-left">
+                                        <p className="text-xs font-black text-white group-hover:text-sky-400 transition-colors uppercase tracking-tight">{f.qualityLabel}</p>
+                                        <p className="text-[9px] text-neutral-500 font-bold uppercase">{f.container}{formatBytes(f.contentLength)}</p>
+                                      </div>
                                     </div>
-                                    <div className="text-left">
-                                      <p className="text-xs font-black text-white group-hover:text-sky-400 transition-colors uppercase tracking-tight">{f.qualityLabel}</p>
-                                      <p className="text-[9px] text-neutral-500 font-bold uppercase">{f.container}{formatBytes(f.contentLength)}</p>
+                                    <div className="p-2 bg-white/5 rounded-xl text-neutral-500 group-hover:text-white group-hover:bg-sky-500 transition-all">
+                                      <Download size={18} />
                                     </div>
-                                  </div>
-                                  <div className="p-2 bg-white/5 rounded-xl text-neutral-500 group-hover:text-white group-hover:bg-sky-500 transition-all">
-                                    <Download size={18} />
-                                  </div>
-                                </button>
-                              ))}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                          </div>
+                          )}
 
                           {info.formats.filter(f => f.mimeType.startsWith('image')).length > 0 && (
                             <div className="space-y-3">
@@ -597,7 +661,7 @@ export default function App() {
           >
             <div className="absolute top-6 left-6 z-[110]">
               <button
-                onClick={() => setIsFullscreen(false)}
+                onClick={() => { setIsFullscreen(false); stopPolling(); }}
                 className="bg-white/10 hover:bg-white/20 p-4 rounded-full text-white backdrop-blur-md transition-all active:scale-90"
               >
                 <X size={24} />
@@ -606,18 +670,27 @@ export default function App() {
 
             <div className="w-full h-full flex items-center justify-center p-4">
               {!selectedFormat.isMp3 && (selectedFormat.format.hasVideo || selectedFormat.format.mimeType.includes('video')) ? (
-                <video
-                  src={(() => {
-                    const { format } = selectedFormat;
-                    if (videoScale === 'original') return resolveMediaUrl(format.proxyUrl || format.url);
-                    const safeTitle = (info?.title || 'video').replace(/[^a-zA-Z0-9]/g, "_");
-                    return `${API_BASE_URL}/api/download/${safeTitle}.mp4?url=${encodeURIComponent(format.url)}&ext=mp4&scale=${videoScale}&inline=true`;
-                  })()}
-                  controls
-                  autoPlay
-                  playsInline
-                  className="max-w-full max-h-[80vh] shadow-2xl"
-                />
+                <div className="relative group">
+                  {videoScale !== 'original' && (
+                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md transition-opacity duration-1000 select-none pointer-events-none" style={{ opacity: previewProgress === 100 ? 0 : 1 }}>
+                      <div className="w-24 h-24 relative mb-4">
+                        <svg className="w-full h-full -rotate-90">
+                          <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-white/10" />
+                          <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" strokeDasharray={251.2} strokeDashoffset={251.2 - (251.2 * previewProgress / 100)} className="text-sky-500 transition-all duration-500 ease-out" />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center font-black text-xl text-white">{previewProgress}%</div>
+                      </div>
+                      <p className="text-[10px] font-black text-sky-400 uppercase tracking-[0.2em] animate-pulse">Exportando composición...</p>
+                    </div>
+                  )}
+                  <video
+                    src={generatePreviewUrl()}
+                    controls
+                    autoPlay
+                    playsInline
+                    className="max-w-full max-h-[80vh] shadow-2xl rounded-xl"
+                  />
+                </div>
               ) : selectedFormat.isMp3 ? (
                 <div className="w-full max-w-sm p-8 glass-card rounded-[3rem] text-center space-y-6">
                   <div className="w-24 h-24 mx-auto bg-sky-600 rounded-3xl flex items-center justify-center shadow-2xl">
@@ -636,12 +709,7 @@ export default function App() {
                 </div>
               ) : (
                 <img
-                  src={(() => {
-                    const { format } = selectedFormat;
-                    if (videoScale === 'original') return resolveMediaUrl(format.proxyUrl || format.url);
-                    const safeTitle = (info?.title || 'video').replace(/[^a-zA-Z0-9]/g, "_");
-                    return `${API_BASE_URL}/api/download/${safeTitle}.jpg?url=${encodeURIComponent(format.url)}&ext=jpg&scale=${videoScale}&inline=true`;
-                  })()}
+                  src={generatePreviewUrl()}
                   className="max-w-full max-h-[80vh] object-contain rounded-2xl"
                 />
               )}

@@ -342,11 +342,22 @@ async function startServer() {
     }
   });
 
+  const progressMap = new Map<string, number>();
+
+  // Progress API
+  app.get("/api/progress/:taskId", (req, res) => {
+    const { taskId } = req.params;
+    res.json({ progress: progressMap.get(taskId) || 0 });
+  });
+
   // Proxy Download
   app.get(["/api/download", "/api/download/:forcedFilename"], async (req, res) => {
     try {
-      const { url, ext, title, mp3, start, end, scale } = req.query;
+      const { url, ext, title, mp3, start, end, scale, taskId } = req.query;
       if (!url || typeof url !== 'string') return res.status(400).send("Missing URL");
+
+      const tid = typeof taskId === 'string' ? taskId : null;
+      if (tid) progressMap.set(tid, 0);
 
       const fetchHeaders: any = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' };
       if (url.includes('twitter.com') || url.includes('x.com') || url.includes('twimg.com')) {
@@ -389,8 +400,10 @@ async function startServer() {
         }
         command.on('error', (err) => {
           console.error("FFmpeg MP3 Error:", err.message);
+          if (tid) progressMap.delete(tid);
           if (!res.headersSent) res.status(500).send("Processing error");
         });
+        command.on('end', () => { if (tid) progressMap.delete(tid); });
         return command.pipe(res);
       } else {
         const extLower = String(targetExt).toLowerCase();
@@ -418,8 +431,8 @@ async function startServer() {
               .videoCodec('libx264')
               .audioCodec('aac')
               .outputOptions([
-                '-preset', 'faster',
-                '-crf', '28',
+                '-preset', 'ultrafast', // Much faster than 'faster'
+                '-crf', '32',           // Slightly lower quality for higher speed
                 '-pix_fmt', 'yuv420p',
                 isInline ? '-movflags' : '-movflags', isInline ? 'frag_keyframe+empty_moov+default_base_moof' : '+faststart',
                 '-profile:v', 'main',
@@ -455,10 +468,21 @@ async function startServer() {
             if (duration > 0) command = command.setDuration(duration);
           }
 
+          command.on('progress', (p) => {
+            if (tid && p.percent) {
+              progressMap.set(tid, Math.round(p.percent));
+            }
+          });
+
           command.on('error', (err) => {
             console.error("FFmpeg error:", err.message);
+            if (tid) progressMap.delete(tid);
             if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
             if (!res.headersSent) res.status(500).send("Processing error");
+          });
+
+          command.on('end', () => {
+            if (tid) progressMap.delete(tid);
           });
 
           if (isInline) {
