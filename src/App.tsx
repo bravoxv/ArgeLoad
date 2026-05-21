@@ -523,9 +523,9 @@ export default function App() {
         <footer className="mt-12 text-center text-[9px] font-bold text-neutral-600 uppercase tracking-widest space-y-2">
           <p>© 2026 ArgeLoad Media Suite</p>
           <div className="flex justify-center gap-4 text-neutral-800">
-            <span>v3.5.0-stable</span>
+            <span>v3.5.1-stable</span>
             <span>•</span>
-            <span>Powered by Gemini 3.5</span>
+            <span>Optimized Media Engine</span>
           </div>
         </footer>
       </main>

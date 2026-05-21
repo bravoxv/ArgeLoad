@@ -352,6 +352,8 @@ async function startServer() {
       if (url.includes('twitter.com') || url.includes('x.com') || url.includes('twimg.com')) {
         fetchHeaders['Referer'] = 'https://twitter.com/';
         fetchHeaders['Origin'] = 'https://twitter.com/';
+      } else if (url.includes('instagram.com')) {
+        fetchHeaders['Referer'] = 'https://instagram.com/';
       }
 
       const fetchRes = await fetch(url, { headers: fetchHeaders });
@@ -387,41 +389,53 @@ async function startServer() {
         return command.pipe(res);
       } else {
         const extLower = String(targetExt).toLowerCase();
-        if (extLower === 'mp3') res.setHeader('Content-Type', 'audio/mpeg');
-        else if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(extLower)) res.setHeader('Content-Type', 'image/jpeg');
+        const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic'].includes(extLower);
+        const isAudio = extLower === 'mp3' || mp3 === 'true';
+
+        if (isAudio) res.setHeader('Content-Type', 'audio/mpeg');
+        else if (isImage) res.setHeader('Content-Type', 'image/jpeg');
         else res.setHeader('Content-Type', 'video/mp4');
 
         if (start || end || scale) {
           if (!fetchRes.body) return res.status(500).send("No source body");
           const nodeStream = Readable.fromWeb(fetchRes.body as any);
-          const tempFilename = `proc_${Date.now()}_${Math.random().toString(36).substring(7)}.mp4`;
+          const tempFilename = `proc_${Date.now()}_${Math.random().toString(36).substring(7)}.${isImage ? 'jpg' : (isAudio ? 'mp3' : 'mp4')}`;
           const tempPath = path.join(__dirname, 'uploads', tempFilename);
 
-          let command = ffmpeg(nodeStream)
-            .toFormat('mp4')
-            .videoCodec('libx264')
-            .audioCodec('aac')
-            .outputOptions([
-              '-preset', 'faster',      // Better compression than veryfast/ultrafast
-              '-crf', '28',             // Good balance for size (standard is 23, 28 is ~50% smaller)
-              '-pix_fmt', 'yuv420p',    // Essential for compatibility
-              '-movflags', '+faststart', // Essential for YouTube/Web
-              '-profile:v', 'main',     // Highly compatible profile
-              '-level', '4.0',          // Standard level
-              '-colorspace', 'bt709',   // YouTube preferred colorspace
-              '-color_trc', 'bt709',
-              '-color_primaries', 'bt709'
-            ]);
+          let command = ffmpeg(nodeStream);
 
+          if (isImage) {
+            // Processing for IMAGES - Keep as image format
+            command = command.toFormat('mjpeg').outputOptions(['-vframes', '1']);
+          } else if (isAudio) {
+            // Processing for AUDIO
+            command = command.toFormat('mp3').audioBitrate('128k');
+          } else {
+            // Processing for VIDEO - Optimized for size and YouTube
+            command = command.toFormat('mp4')
+              .videoCodec('libx264')
+              .audioCodec('aac')
+              .outputOptions([
+                '-preset', 'faster',
+                '-crf', '28',
+                '-pix_fmt', 'yuv420p',
+                '-movflags', '+faststart',
+                '-profile:v', 'main',
+                '-level', '4.0',
+                '-colorspace', 'bt709',
+                '-color_trc', 'bt709',
+                '-color_primaries', 'bt709'
+              ]);
+          }
+
+          // Apply Scaling/Cropping logic
           if (scale === '16_9') {
-            // Scale and Crop to 1280x720 (Standard HD)
             command = command.videoFilters([
               "scale='if(gt(iw/ih,16/9),-2,1280)':'if(gt(iw/ih,16/9),720,-2)':force_original_aspect_ratio=increase",
               "crop=1280:720",
               "setsar=1"
             ]);
           } else if (scale === '9_16') {
-            // Scale and Pad to 720x1280 (Standard HD Vertical)
             command = command.videoFilters([
               "scale=720:1280:force_original_aspect_ratio=decrease",
               "pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=black",
@@ -429,8 +443,8 @@ async function startServer() {
             ]);
           }
 
-          if (start) command = command.setStartTime(String(start));
-          if (end) {
+          if (start && !isImage) command = command.setStartTime(String(start));
+          if (end && !isImage) {
             const getSec = (t: string) => {
               const parts = String(t).split(':').reverse();
               return parts.reduce((acc, val, i) => acc + (Number(val) * Math.pow(60, i)), 0);
