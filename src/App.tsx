@@ -454,32 +454,57 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="grid gap-3">
-                          <div className="bg-neutral-900 border border-white/5 p-4 rounded-3xl">
-                            <h3 className="text-[10px] font-black text-neutral-600 uppercase tracking-widest mb-3 flex items-center gap-2">
-                              <Music size={12} className="text-indigo-400" /> EXTRAER SONIDO
-                            </h3>
-                            <button onClick={() => handleDownloadClick(info.formats[0], true)} className="w-full flex items-center justify-between p-4 bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-2xl transition-all font-black text-xs uppercase">
-                              Descargar MP3 <Download size={16} />
-                            </button>
+                        <div className="space-y-6">
+                          {/* Audio Section */}
+                          <div className="relative group">
+                            <div className="absolute inset-0 bg-gradient-to-r from-indigo-600/20 to-purple-600/20 blur-xl opacity-50 transition-opacity" />
+                            <div className="relative bg-neutral-900 border border-white/10 p-5 rounded-[2.5rem] shadow-2xl">
+                              <div className="flex items-center justify-between mb-4 px-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 bg-indigo-500/10 rounded-xl flex items-center justify-center">
+                                    <Music size={16} className="text-indigo-400" />
+                                  </div>
+                                  <h3 className="text-[10px] font-black text-white uppercase tracking-widest">Extraer Sonido</h3>
+                                </div>
+                                <span className="px-2 py-0.5 bg-indigo-500 text-[8px] font-black rounded-full text-white">MP3 HQ</span>
+                              </div>
+                              <button
+                                onClick={() => handleDownloadClick(info.formats[0], true)}
+                                className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl transition-all font-black text-xs uppercase flex items-center justify-center gap-3 shadow-lg shadow-indigo-600/20 active:scale-95"
+                              >
+                                DESCARGAR MP3 <Download size={16} />
+                              </button>
+                            </div>
                           </div>
 
-                          <div className="space-y-2">
-                            <h3 className="text-[10px] font-black text-neutral-600 uppercase tracking-widest px-2">CALIDADES DE VIDEO</h3>
-                            {info.formats.filter(f => f.hasVideo).map((f, i) => (
-                              <button key={i} onClick={() => handleDownloadClick(f, false)} className="w-full flex items-center justify-between p-4 bg-neutral-900/50 border border-white/5 rounded-3xl hover:bg-neutral-800 transition-all">
-                                <div className="flex items-center gap-4">
-                                  <div className="w-10 h-10 bg-sky-500/10 rounded-xl flex items-center justify-center text-sky-400">
-                                    <Film size={20} />
+                          {/* Video Section */}
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between px-4">
+                              <h3 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">Opciones de Video</h3>
+                              <div className="h-px flex-1 bg-white/5 mx-4" />
+                            </div>
+                            <div className="grid gap-2">
+                              {info.formats.filter(f => f.hasVideo).map((f, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => handleDownloadClick(f, false)}
+                                  className="group w-full flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-[2rem] hover:bg-white/10 active:bg-sky-600/20 transition-all border-l-4 border-l-transparent hover:border-l-sky-500"
+                                >
+                                  <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 bg-sky-500/10 rounded-2xl flex items-center justify-center text-sky-400 group-hover:scale-110 transition-transform">
+                                      <Film size={20} />
+                                    </div>
+                                    <div className="text-left">
+                                      <p className="text-xs font-black text-white group-hover:text-sky-400 transition-colors uppercase tracking-tight">{f.qualityLabel}</p>
+                                      <p className="text-[9px] text-neutral-500 font-bold uppercase">{f.container}{formatBytes(f.contentLength)}</p>
+                                    </div>
                                   </div>
-                                  <div className="text-left">
-                                    <p className="text-xs font-black text-white">{f.qualityLabel}</p>
-                                    <p className="text-[9px] text-neutral-500 font-bold uppercase">{f.container}{formatBytes(f.contentLength)}</p>
+                                  <div className="p-2 bg-white/5 rounded-xl text-neutral-500 group-hover:text-white group-hover:bg-sky-500 transition-all">
+                                    <Download size={18} />
                                   </div>
-                                </div>
-                                <Download size={18} className="text-neutral-600" />
-                              </button>
-                            ))}
+                                </button>
+                              ))}
+                            </div>
                           </div>
 
                           {info.formats.filter(f => f.mimeType.startsWith('image')).length > 0 && (
@@ -554,9 +579,9 @@ export default function App() {
         <footer className="mt-12 text-center text-[9px] font-bold text-neutral-600 uppercase tracking-widest space-y-2">
           <p>© 2026 ArgeLoad Media Suite</p>
           <div className="flex justify-center gap-4 text-neutral-800">
-            <span>v3.5.3-stable</span>
+            <span>v3.6.0-stable</span>
             <span>•</span>
-            <span>Production Ready</span>
+            <span>Gold Edition</span>
           </div>
         </footer>
       </main>

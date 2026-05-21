@@ -440,7 +440,8 @@ async function startServer() {
             command = command.videoFilters([
               "scale=720:1280:force_original_aspect_ratio=decrease",
               "pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=black",
-              "setsar=1"
+              "setsar=1",
+              "scale=trunc(iw/2)*2:trunc(ih/2)*2"
             ]);
           }
 
@@ -455,26 +456,24 @@ async function startServer() {
           }
 
           command.on('error', (err) => {
-            console.error("FFmpeg Video Error:", err.message);
+            console.error("FFmpeg error:", err.message);
             if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-            if (!res.headersSent) res.status(500).send("Processing error: " + err.message);
+            if (!res.headersSent) res.status(500).send("Processing error");
           });
 
-          command.on('end', () => {
-            if (isInline) {
-              res.sendFile(tempPath, (err) => {
-                if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-                if (err && !res.headersSent) console.error("Inline View Error:", err);
-              });
-            } else {
+          if (isInline) {
+            // REAL-TIME STREAMING
+            command.pipe(res, { end: true });
+          } else {
+            // TRADITIONAL DOWNLOAD
+            command.on('end', () => {
               res.download(tempPath, filename, (err) => {
                 if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
                 if (err && !res.headersSent) console.error("Download Error:", err);
               });
-            }
-          });
-
-          command.save(tempPath);
+            });
+            command.save(tempPath);
+          }
           return;
         }
 
