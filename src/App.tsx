@@ -246,40 +246,24 @@ export default function App() {
               </button>
 
               <div className="glass-card rounded-[2.5rem] overflow-hidden p-6 text-center space-y-6">
-                <div className="w-full aspect-video mx-auto relative group bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/10">
-                  <div className="absolute inset-0 bg-sky-500 blur-2xl opacity-20 animate-pulse" />
-
-                  {loadingPreview && (
-                    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
-                      <Loader2 className="animate-spin text-sky-400 mb-2" size={32} />
-                      <span className="text-[10px] font-black text-sky-400 uppercase tracking-widest">Procesando Aspecto...</span>
-                      {previewProgress > 0 && <span className="text-xl font-black text-white mt-1">{previewProgress}%</span>}
-                    </div>
-                  )}
+                <div className={`mx-auto relative group bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/10 transition-all duration-700 ease-in-out flex items-center justify-center ${videoScale === '9_16' ? 'w-[64%] aspect-[9/16]' : 'w-full aspect-video'}`}>
+                  <div className="absolute inset-0 bg-sky-500 blur-2xl opacity-10 animate-pulse pointer-events-none" />
 
                   {!selectedFormat.isMp3 && (selectedFormat.format.hasVideo || selectedFormat.format.mimeType.includes('video')) ? (
-                    <div className={`w-full h-full flex items-center justify-center bg-black overflow-hidden transition-all duration-500 ${videoScale === '16_9' ? 'aspect-video' : videoScale === '9_16' ? 'aspect-[9/16]' : 'aspect-video'
-                      }`}>
-                      <video
-                        src={resolveMediaUrl(selectedFormat.format.proxyUrl || selectedFormat.format.url)}
-                        controls
-                        autoPlay
-                        muted
-                        playsInline
-                        className={`w-full h-full transition-all duration-500 ${videoScale === '16_9' ? 'object-cover' : videoScale === '9_16' ? 'object-contain' : 'object-contain'
-                          }`}
-                      />
-                    </div>
+                    <video
+                      src={resolveMediaUrl(selectedFormat.format.proxyUrl || selectedFormat.format.url)}
+                      controls
+                      autoPlay
+                      muted
+                      playsInline
+                      className={`w-full h-full transition-all duration-700 ease-in-out ${videoScale === '16_9' ? 'object-cover' : videoScale === '9_16' ? 'object-contain' : 'object-contain'}`}
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center p-4">
-                      <div className={`transition-all duration-500 overflow-hidden shadow-2xl rounded-2xl border border-white/5 ${videoScale === '16_9' ? 'aspect-video' : videoScale === '9_16' ? 'aspect-[9/16]' : ''
-                        }`}>
-                        <img
-                          src={resolveMediaUrl(info?.thumbnail)}
-                          className={`w-full h-full transition-all duration-500 ${videoScale === '16_9' ? 'object-cover' : videoScale === '9_16' ? 'object-contain bg-black' : 'object-contain'
-                            }`}
-                        />
-                      </div>
+                      <img
+                        src={resolveMediaUrl(info?.thumbnail)}
+                        className={`w-full h-full transition-all duration-700 ease-in-out ${videoScale === '16_9' ? 'object-cover' : videoScale === '9_16' ? 'object-contain' : 'object-contain'}`}
+                      />
                     </div>
                   )}
                   <div className="absolute -bottom-2 -right-2 bg-sky-600 p-2 rounded-xl z-20 shadow-lg">
