@@ -81,7 +81,7 @@ async function startServer() {
             if (yt.mp4) formats.push({ itag: 137, mimeType: 'video/mp4', qualityLabel: 'Video HD', hasVideo: true, hasAudio: true, container: 'mp4', url: yt.mp4 });
             if (yt.mp3) formats.push({ itag: 140, mimeType: 'audio/mpeg', qualityLabel: 'Audio MP3', hasVideo: false, hasAudio: true, container: 'mp3', url: yt.mp3 });
 
-            return res.json({ title: yt.title || "YouTube Video", author: yt.author || "YouTube", thumbnail: yt.thumbnail || "", platform: 'youtube', formats });
+            return res.json({ title: yt.title || "YouTube Video", author: yt.author || "YouTube", thumbnail: yt.thumbnail || "", duration: yt.duration, platform: 'youtube', formats });
           }
         } catch (e) { }
       }
@@ -107,7 +107,7 @@ async function startServer() {
               const isImg = v.match(/\.(jpg|jpeg|png|webp)/i);
               return { itag: 300 + i, mimeType: isImg ? 'image/jpeg' : 'video/mp4', qualityLabel: isImg ? `Imagen ${i + 1}` : 'Video', hasVideo: !isImg, hasAudio: !isImg, container: isImg ? 'jpg' : 'mp4', url: v };
             });
-            return { title: "TikTok Content", author: "TikTok User", thumbnail: formats[0]?.url, platform: 'tiktok', formats };
+            return { title: "TikTok Content", author: "TikTok User", thumbnail: formats[0]?.url, duration: (tt as any).duration, platform: 'tiktok', formats };
           })()
         ]);
         if (result) return res.json(result);
@@ -469,8 +469,26 @@ async function startServer() {
           }
 
           command.on('progress', (p) => {
-            if (tid && p.percent) {
-              progressMap.set(tid, Math.round(p.percent));
+            if (tid) {
+              if (p.percent) {
+                progressMap.set(tid, Math.round(p.percent));
+              } else if (p.timemark && req.query.duration) {
+                // Estimate percent if duration is known
+                const getSec = (t: string) => {
+                  const parts = String(t).split(':').reverse();
+                  return parts.reduce((acc, val, i) => acc + (Number(val) * Math.pow(60, i)), 0);
+                };
+                const current = getSec(p.timemark);
+                const total = Number(req.query.duration);
+                if (total > 0) {
+                  const pct = Math.min(99, Math.round((current / total) * 100));
+                  progressMap.set(tid, pct);
+                }
+              } else {
+                // Fallback: move slowly based on frames if nothing else is available
+                const current = progressMap.get(tid) || 2;
+                if (current < 95) progressMap.set(tid, current + 1);
+              }
             }
           });
 

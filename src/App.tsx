@@ -715,9 +715,15 @@ export default function App() {
               )}
             </div>
 
-            <div className="absolute bottom-10 text-center space-y-4">
-              <p className="text-white/40 text-[10px] font-black uppercase tracking-widest animate-pulse">
-                Usa los 3 puntos del reproductor para Guardar
+            <div className="absolute bottom-8 left-0 right-0 px-6 space-y-4">
+              <button
+                onClick={() => window.open(generatePreviewUrl().replace('inline=true', 'inline=false'), '_system')}
+                className="w-full py-5 bg-white text-black font-black rounded-3xl shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all text-sm uppercase tracking-tighter"
+              >
+                <Download size={20} /> GUARDAR EN DISPOSITIVO
+              </button>
+              <p className="text-white/30 text-[9px] font-black uppercase tracking-widest text-center">
+                ArgeLoad Media Suite • Servidor Seguro
               </p>
             </div>
           </motion.div>
