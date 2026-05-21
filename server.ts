@@ -421,7 +421,7 @@ async function startServer() {
                 '-preset', 'faster',
                 '-crf', '28',
                 '-pix_fmt', 'yuv420p',
-                '-movflags', '+faststart',
+                isInline ? '-movflags' : '-movflags', isInline ? 'frag_keyframe+empty_moov+default_base_moof' : '+faststart',
                 '-profile:v', 'main',
                 '-level', '4.0',
                 '-colorspace', 'bt709',

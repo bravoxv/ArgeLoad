@@ -65,6 +65,7 @@ export default function App() {
 
   const [view, setView] = useState<'home' | 'download'>('home');
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState<{ format: Format; isMp3: boolean } | null>(null);
 
   useEffect(() => {
@@ -177,7 +178,7 @@ export default function App() {
     else if (format.hasVideo && videoScale !== 'original') downloadUrl += `&scale=${videoScale}`;
 
     addToHistory(info.title, downloadUrl, info.platform, info.thumbnail);
-    window.open(downloadUrl, '_system');
+    setIsFullscreen(true);
   };
 
   return (
@@ -559,6 +560,76 @@ export default function App() {
           </div>
         </footer>
       </main>
+
+      {/* Fullscreen Player Overlay */}
+      <AnimatePresence>
+        {isFullscreen && selectedFormat && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center"
+          >
+            <div className="absolute top-6 left-6 z-[110]">
+              <button
+                onClick={() => setIsFullscreen(false)}
+                className="bg-white/10 hover:bg-white/20 p-4 rounded-full text-white backdrop-blur-md transition-all active:scale-90"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="w-full h-full flex items-center justify-center p-4">
+              {!selectedFormat.isMp3 && (selectedFormat.format.hasVideo || selectedFormat.format.mimeType.includes('video')) ? (
+                <video
+                  src={(() => {
+                    const { format } = selectedFormat;
+                    if (videoScale === 'original') return resolveMediaUrl(format.proxyUrl || format.url);
+                    const safeTitle = (info?.title || 'video').replace(/[^a-zA-Z0-9]/g, "_");
+                    return `${API_BASE_URL}/api/download/${safeTitle}.mp4?url=${encodeURIComponent(format.url)}&ext=mp4&scale=${videoScale}&inline=true`;
+                  })()}
+                  controls
+                  autoPlay
+                  playsInline
+                  className="max-w-full max-h-[80vh] shadow-2xl"
+                />
+              ) : selectedFormat.isMp3 ? (
+                <div className="w-full max-w-sm p-8 glass-card rounded-[3rem] text-center space-y-6">
+                  <div className="w-24 h-24 mx-auto bg-sky-600 rounded-3xl flex items-center justify-center shadow-2xl">
+                    <Music size={40} className="text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-white font-black truncate">{info?.title}</h3>
+                    <p className="text-[10px] text-neutral-500 font-bold uppercase mt-1">Audio Extracted</p>
+                  </div>
+                  <audio
+                    src={`${API_BASE_URL}/api/download/audio.mp3?url=${encodeURIComponent(selectedFormat.format.url)}&ext=mp3&mp3=true&inline=true`}
+                    controls
+                    autoPlay
+                    className="w-full"
+                  />
+                </div>
+              ) : (
+                <img
+                  src={(() => {
+                    const { format } = selectedFormat;
+                    if (videoScale === 'original') return resolveMediaUrl(format.proxyUrl || format.url);
+                    const safeTitle = (info?.title || 'video').replace(/[^a-zA-Z0-9]/g, "_");
+                    return `${API_BASE_URL}/api/download/${safeTitle}.jpg?url=${encodeURIComponent(format.url)}&ext=jpg&scale=${videoScale}&inline=true`;
+                  })()}
+                  className="max-w-full max-h-[80vh] object-contain rounded-2xl"
+                />
+              )}
+            </div>
+
+            <div className="absolute bottom-10 text-center space-y-4">
+              <p className="text-white/40 text-[10px] font-black uppercase tracking-widest animate-pulse">
+                Usa los 3 puntos del reproductor para Guardar
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
