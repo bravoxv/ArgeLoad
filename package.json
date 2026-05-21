@@ -3,12 +3,12 @@
   "private": true,
   "version": "0.0.0",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "scripts": {
     "dev": "npx tsx server.ts",
     "start": "npx tsx server.ts",
-    "build": "npx vite build",
+    "build": "npm install && npx vite build",
     "preview": "npx vite preview",
     "clean": "rm -rf dist android",
     "lint": "tsc --noEmit",
