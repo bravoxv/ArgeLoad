@@ -492,8 +492,8 @@ async function startServer() {
 
           if (scale === '16_9') {
             command = command.videoFilters([
-              "scale=854:480:force_original_aspect_ratio=decrease",
-              "pad=854:480:(ow-iw)/2:(oh-ih)/2:color=black",
+              "scale='if(gt(iw/ih,16/9),-2,854)':'if(gt(iw/ih,16/9),480,-2)':force_original_aspect_ratio=increase",
+              "crop=854:480",
               "setsar=1"
             ]);
           } else if (scale === '9_16') {
@@ -549,7 +549,23 @@ async function startServer() {
           if (scale && !isImage && !isAudio) {
             const cacheKey = `${url}|${scale}`;
 
-            // Check if this same task is already running
+            // If it's inline, we can stream it in real-time for an "instant" feel
+            if (isInline) {
+              res.setHeader('Content-Type', 'video/mp4');
+              res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+
+              command = command.outputOptions([
+                '-movflags', 'frag_keyframe+empty_moov+default_base_moof'
+              ]);
+
+              command.on('error', (err) => {
+                if (!res.headersSent) res.status(500).send("Stream error");
+              });
+
+              return command.pipe(res, { end: true });
+            }
+
+            // For non-inline (real downloads), use the file-based approach for stability
             if (!activeTasks.has(cacheKey)) {
               const taskPromise = new Promise<string>((resolve, reject) => {
                 command.on('end', () => {
@@ -574,7 +590,7 @@ async function startServer() {
                 res.setHeader('Content-Type', 'video/mp4');
                 res.setHeader('Content-Length', stat.size);
                 res.setHeader('Accept-Ranges', 'bytes');
-                res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+                res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
                 fs.createReadStream(finalPath).pipe(res);
               }
             } catch (err) {
