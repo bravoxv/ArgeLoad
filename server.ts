@@ -344,8 +344,8 @@ async function startServer() {
   });
 
   const progressMap = new Map<string, number>();
-  // Cache: "url|scale" -> filepath
   const scaleCache = new Map<string, string>();
+  const activeTasks = new Map<string, Promise<string>>();
 
   // Clean up old cache entries every 30 minutes
   setInterval(() => {
@@ -383,11 +383,26 @@ async function startServer() {
         if (cachedPath && fs.existsSync(cachedPath)) {
           console.log(`[CACHE HIT] Serving ${scale} for cached video`);
           if (tid) progressMap.set(tid, 100);
+          const stat = fs.statSync(cachedPath);
           res.setHeader('Content-Type', 'video/mp4');
-          res.setHeader('Content-Length', fs.statSync(cachedPath).size);
+          res.setHeader('Content-Length', stat.size);
           res.setHeader('Accept-Ranges', 'bytes');
-          if (title) res.setHeader('Content-Disposition', `inline; filename="${String(title).replace(/[^a-zA-Z0-9._]/g, '_')}.mp4"`);
-          fs.createReadStream(cachedPath).pipe(res);
+          const safeName = (title as string || 'ArgeLoad').replace(/[^a-zA-Z0-9._]/g, '_');
+          res.setHeader('Content-Disposition', `inline; filename="${safeName}.mp4"`);
+
+          // Support for Range requests (important for browser players and '3 dots' menu)
+          const range = req.headers.range;
+          if (range) {
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+            res.status(206);
+            res.setHeader('Content-Range', `bytes ${start}-${end}/${stat.size}`);
+            res.setHeader('Content-Length', (end - start) + 1);
+            fs.createReadStream(cachedPath, { start, end }).pipe(res);
+          } else {
+            fs.createReadStream(cachedPath).pipe(res);
+          }
           return;
         }
       }
@@ -415,7 +430,7 @@ async function startServer() {
       let filename = `${safeTitle}.${targetExt}`;
 
       if (isInline) {
-        res.setHeader('Content-Disposition', 'inline');
+        res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
       } else {
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       }
@@ -464,21 +479,21 @@ async function startServer() {
           } else {
             command = command.toFormat('mp4')
               .videoCodec('libx264')
-              .audioCodec('copy') // Much faster: don't re-encode audio
+              .audioCodec('aac') // Better compatibility than 'copy' when re-encoding
               .outputOptions([
                 '-preset', 'ultrafast',
-                '-crf', '32',
+                '-crf', '28',
                 '-pix_fmt', 'yuv420p',
-                '-tune', 'zerolatency', // Optimize for streaming speed
-                '-threads', '0',        // Use all available CPUs
-                '-movflags', isInline ? 'frag_keyframe+empty_moov+default_base_moof' : '+faststart'
+                '-tune', 'zerolatency',
+                '-threads', '0',
+                '-movflags', '+faststart' // Standard for web playability
               ]);
           }
 
           if (scale === '16_9') {
             command = command.videoFilters([
-              "scale='if(gt(iw/ih,16/9),-2,854)':'if(gt(iw/ih,16/9),480,-2)':force_original_aspect_ratio=increase",
-              "crop=854:480",
+              "scale=854:480:force_original_aspect_ratio=decrease",
+              "pad=854:480:(ow-iw)/2:(oh-ih)/2:color=black",
               "setsar=1"
             ]);
           } else if (scale === '9_16') {
@@ -532,26 +547,39 @@ async function startServer() {
           });
 
           if (scale && !isImage && !isAudio) {
-            // Always write scaled videos to a file first, then serve (enables caching + range support)
             const cacheKey = `${url}|${scale}`;
-            command.on('end', () => {
-              if (tid) {
-                progressMap.set(tid, 100);
-                setTimeout(() => progressMap.delete(tid), 5000);
-              }
-              // Cache for future requests
-              scaleCache.set(cacheKey, tempPath);
+
+            // Check if this same task is already running
+            if (!activeTasks.has(cacheKey)) {
+              const taskPromise = new Promise<string>((resolve, reject) => {
+                command.on('end', () => {
+                  if (tid) progressMap.set(tid, 100);
+                  scaleCache.set(cacheKey, tempPath);
+                  activeTasks.delete(cacheKey);
+                  resolve(tempPath);
+                });
+                command.on('error', (err) => {
+                  activeTasks.delete(cacheKey);
+                  reject(err);
+                });
+                command.save(tempPath);
+              });
+              activeTasks.set(cacheKey, taskPromise);
+            }
+
+            try {
+              const finalPath = await activeTasks.get(cacheKey)!;
               if (!res.headersSent) {
-                const stat = fs.statSync(tempPath);
+                const stat = fs.statSync(finalPath);
                 res.setHeader('Content-Type', 'video/mp4');
                 res.setHeader('Content-Length', stat.size);
                 res.setHeader('Accept-Ranges', 'bytes');
-                fs.createReadStream(tempPath).pipe(res).on('finish', () => {
-                  // Keep file in cache, don't delete
-                });
+                res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+                fs.createReadStream(finalPath).pipe(res);
               }
-            });
-            command.save(tempPath);
+            } catch (err) {
+              if (!res.headersSent) res.status(500).send("Processing error");
+            }
           } else if (isInline) {
             // Non-scale inline: real-time stream
             command.on('end', () => { if (tid) progressMap.delete(tid); });

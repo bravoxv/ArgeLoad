@@ -226,12 +226,12 @@ export default function App() {
 
                   {!selectedFormat.isMp3 && (selectedFormat.format.hasVideo || selectedFormat.format.mimeType.includes('video')) ? (
                     <video
-                      src={resolveMediaUrl(selectedFormat.format.proxyUrl || selectedFormat.format.url)}
+                      src={generatePreviewUrl()}
                       controls
                       autoPlay
                       muted
                       playsInline
-                      className={`w-full h-full transition-all duration-700 ease-in-out ${videoScale === '16_9' ? 'object-cover' : videoScale === '9_16' ? 'object-contain' : 'object-contain'}`}
+                      className={`w-full h-full transition-all duration-700 ease-in-out ${videoScale === '16_9' ? 'object-contain' : videoScale === '9_16' ? 'object-contain' : 'object-contain'}`}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center p-4">
