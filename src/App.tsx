@@ -88,8 +88,8 @@ export default function App() {
 
   const resolveMediaUrl = (url: string | undefined): string => {
     if (!url) return '/placeholder.png';
-    if (url.startsWith('/api/proxy-image')) return `${API_BASE_URL}${url}`;
-    if (url.includes('instagram.com') || url.includes('fbcdn.net') || url.includes('twimg.com')) return `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(url)}`;
+    if (url.startsWith('/api/')) return `${API_BASE_URL}${url}`;
+    if (url.includes('instagram.com') || url.includes('fbcdn.net')) return `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(url)}`;
     if (url.startsWith('http')) return url;
     return `${API_BASE_URL}${url}`;
   };

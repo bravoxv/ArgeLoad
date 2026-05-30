@@ -93,10 +93,10 @@ async function startServer() {
             const tt = await ruhend.ttdl(cleanUrl);
             if (!tt) return null;
             const formats = [];
-            if (tt.video) formats.push({ itag: 137, mimeType: 'video/mp4', qualityLabel: 'Video Original', hasVideo: true, hasAudio: true, container: 'mp4', url: tt.video });
-            if (tt.music) formats.push({ itag: 140, mimeType: 'audio/mpeg', qualityLabel: 'Audio Original', hasVideo: false, hasAudio: true, container: 'mp3', url: tt.music });
+            if (tt.video) formats.push({ itag: 137, mimeType: 'video/mp4', qualityLabel: 'Video Original', hasVideo: true, hasAudio: true, container: 'mp4', url: tt.video, proxyUrl: `/api/download?url=${encodeURIComponent(tt.video)}&inline=true` });
+            if (tt.music) formats.push({ itag: 140, mimeType: 'audio/mpeg', qualityLabel: 'Audio Original', hasVideo: false, hasAudio: true, container: 'mp3', url: tt.music, proxyUrl: `/api/download?url=${encodeURIComponent(tt.music)}&mp3=true&inline=true` });
             (tt.photo || []).forEach((p: string, i: number) => {
-              formats.push({ itag: 200 + i, mimeType: 'image/jpeg', qualityLabel: `Imagen ${i + 1}`, hasVideo: false, hasAudio: false, container: 'jpg', url: p });
+              formats.push({ itag: 200 + i, mimeType: 'image/jpeg', qualityLabel: `Imagen ${i + 1}`, hasVideo: false, hasAudio: false, container: 'jpg', url: p, proxyUrl: `/api/proxy-image?url=${encodeURIComponent(p)}` });
             });
             return { title: tt.title, author: tt.author, thumbnail: tt.cover, platform: 'tiktok', formats };
           })(),
@@ -181,7 +181,8 @@ async function startServer() {
             const formats = data.media_extended.map((m: any, i: number) => ({
               itag: 600 + i, mimeType: m.type === 'video' || m.type === 'gif' ? 'video/mp4' : 'image/jpeg',
               qualityLabel: m.type === 'video' || m.type === 'gif' ? `Video ${i + 1}` : `Imagen ${i + 1}`,
-              hasVideo: m.type === 'video' || m.type === 'gif', hasAudio: m.type === 'video', container: m.type === 'video' || m.type === 'gif' ? 'mp4' : 'jpg', url: m.url
+              hasVideo: m.type === 'video' || m.type === 'gif', hasAudio: m.type === 'video', container: m.type === 'video' || m.type === 'gif' ? 'mp4' : 'jpg', url: m.url,
+              proxyUrl: m.type === 'video' || m.type === 'gif' ? `/api/download?url=${encodeURIComponent(m.url)}&inline=true` : `/api/proxy-image?url=${encodeURIComponent(m.url)}`
             }));
             return res.json({ title: data.text || "Twitter/X Post", author: `${data.user_name} (@${data.user_screen_name})`, thumbnail: data.media_extended[0]?.thumbnail_url || data.media_extended[0]?.url, platform: 'twitter', formats });
           }
@@ -194,8 +195,8 @@ async function startServer() {
           const fb = await ruhend.fbdl(cleanUrl);
           if (fb?.hd || fb?.sd) {
             const formats = [];
-            if (fb.hd) formats.push({ itag: 700, mimeType: 'video/mp4', qualityLabel: 'Calidad HD', hasVideo: true, hasAudio: true, container: 'mp4', url: fb.hd });
-            if (fb.sd) formats.push({ itag: 701, mimeType: 'video/mp4', qualityLabel: 'Calidad SD', hasVideo: true, hasAudio: true, container: 'mp4', url: fb.sd });
+            if (fb.hd) formats.push({ itag: 700, mimeType: 'video/mp4', qualityLabel: 'Calidad HD', hasVideo: true, hasAudio: true, container: 'mp4', url: fb.hd, proxyUrl: `/api/download?url=${encodeURIComponent(fb.hd)}&inline=true` });
+            if (fb.sd) formats.push({ itag: 701, mimeType: 'video/mp4', qualityLabel: 'Calidad SD', hasVideo: true, hasAudio: true, container: 'mp4', url: fb.sd, proxyUrl: `/api/download?url=${encodeURIComponent(fb.sd)}&inline=true` });
             return res.json({ title: "Facebook Video", author: "Facebook User", thumbnail: "", platform: 'facebook', formats });
           }
         } catch (e) { }
@@ -395,8 +396,8 @@ async function startServer() {
 
       const fetchHeaders: any = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' };
       if (url.includes('twitter.com') || url.includes('x.com') || url.includes('twimg.com')) {
-        fetchHeaders['Referer'] = 'https://twitter.com/';
-        fetchHeaders['Origin'] = 'https://twitter.com/';
+        fetchHeaders['Referer'] = 'https://x.com/';
+        fetchHeaders['Origin'] = 'https://x.com/';
       } else if (url.includes('instagram.com')) {
         fetchHeaders['Referer'] = 'https://instagram.com/';
       }
@@ -585,7 +586,15 @@ async function startServer() {
     try {
       const { url } = req.query;
       if (!url || typeof url !== 'string') return res.status(400).send("Missing URL");
-      const fetchRes = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://instagram.com/' } });
+
+      const fetchHeaders: any = { 'User-Agent': 'Mozilla/5.0' };
+      if (url.includes('instagram.com') || url.includes('fbcdn.net')) {
+        fetchHeaders['Referer'] = 'https://instagram.com/';
+      } else if (url.includes('twitter.com') || url.includes('x.com') || url.includes('twimg.com')) {
+        fetchHeaders['Referer'] = 'https://x.com/';
+      }
+
+      const fetchRes = await fetch(url, { headers: fetchHeaders });
       res.setHeader('Content-Type', fetchRes.headers.get('content-type') || 'image/jpeg');
       if (fetchRes.body) {
         const nodeStream = Readable.fromWeb(fetchRes.body as any);
