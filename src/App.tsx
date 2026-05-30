@@ -1,4 +1,4 @@
-import { Download, Film, Music, Loader2, Video, ImageIcon, ClipboardIcon, X, History, Sparkles, Globe, Smartphone, Monitor, Search, CheckCircle2 } from "lucide-react";
+import { ExternalLink, Film, Music, Loader2, Video, ImageIcon, ClipboardIcon, X, History, Sparkles, Globe, Smartphone, Monitor, Search, CheckCircle2 } from "lucide-react";
 import { Clipboard as CapacitorClipboard } from '@capacitor/clipboard';
 import { Capacitor } from '@capacitor/core';
 import React, { useState, useEffect } from "react";
@@ -65,7 +65,6 @@ export default function App() {
 
   const [view, setView] = useState<'home' | 'download'>('home');
   const [loadingPreview, setLoadingPreview] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState<{ format: Format; isMp3: boolean } | null>(null);
 
   useEffect(() => {
@@ -160,32 +159,7 @@ export default function App() {
     }
   };
 
-  const [previewProgress, setPreviewProgress] = useState(0);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
-
-  const stopPolling = () => {
-    setCurrentTaskId(null);
-    setPreviewProgress(0);
-  };
-
-  useEffect(() => {
-    let interval: any;
-    if (isFullscreen && currentTaskId && videoScale !== 'original') {
-      interval = setInterval(async () => {
-        try {
-          const res = await fetch(`${API_BASE_URL}/api/progress/${currentTaskId}`);
-          const data = await res.json();
-          if (data.progress > 0) {
-            setPreviewProgress(data.progress);
-            if (data.progress >= 100) clearInterval(interval);
-          }
-        } catch (e) { }
-      }, 1000);
-    } else {
-      setPreviewProgress(0);
-    }
-    return () => clearInterval(interval);
-  }, [isFullscreen, currentTaskId, videoScale]);
 
   const handleDownloadClick = (format: Format, isMp3: boolean) => {
     setSelectedFormat({ format, isMp3 });
@@ -223,7 +197,8 @@ export default function App() {
     }
 
     addToHistory(info.title, downloadUrl, info.platform, info.thumbnail);
-    setIsFullscreen(true);
+    // Cambiamos setIsFullscreen(true) por abrir en el navegador
+    window.open(downloadUrl, '_system');
   };
 
   return (
@@ -279,7 +254,7 @@ export default function App() {
                 <div className="bg-white/5 rounded-2xl p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <CheckCircle2 size={16} className="text-emerald-500" />
-                    <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Listo para descargar</span>
+                    <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Contenido Preparado</span>
                   </div>
                   <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-tighter">
                     {formatBytes(selectedFormat.format.contentLength)}
@@ -317,9 +292,9 @@ export default function App() {
                   {loadingPreview ? (
                     <Loader2 className="animate-spin" size={20} />
                   ) : (
-                    <Download size={20} className={videoScale !== 'original' ? "animate-bounce" : ""} />
+                    <ExternalLink size={20} className={videoScale !== 'original' ? "animate-bounce" : ""} />
                   )}
-                  {loadingPreview ? 'ESPERANDO PROCESAMIENTO...' : (videoScale === 'original' ? 'ABRIR PARA GUARDAR' : 'PROCESAR Y ABRIR')}
+                  {loadingPreview ? 'ESPERANDO PROCESAMIENTO...' : 'ABRIR EN EL NAVEGADOR'}
                 </button>
 
                 <p className="text-[9px] text-neutral-600 font-bold italic tracking-wide">
@@ -496,8 +471,8 @@ export default function App() {
                                   onClick={() => handleDownloadClick(info.formats[0], true)}
                                   className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl transition-all font-black text-[10px] uppercase flex flex-col items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-95"
                                 >
-                                  <Download size={18} />
-                                  <span>MP3 HQ</span>
+                                  <Music size={18} />
+                                  <span>PREVISUALIZAR MP3</span>
                                 </button>
                               </div>
                             </div>
@@ -516,8 +491,8 @@ export default function App() {
                                   onClick={() => handleDownloadClick(info.formats.find(f => f.hasVideo) || info.formats[0], false)}
                                   className="w-full py-4 bg-gradient-to-r from-sky-600 to-indigo-600 text-white rounded-2xl transition-all font-black text-[10px] uppercase flex flex-col items-center justify-center gap-2 shadow-lg shadow-sky-600/20 active:scale-95"
                                 >
-                                  <Download size={18} />
-                                  <span>MP4 VIDEO</span>
+                                  <Video size={18} />
+                                  <span>PREVISUALIZAR MP4</span>
                                 </button>
                               </div>
                             </div>
@@ -547,7 +522,7 @@ export default function App() {
                                       </div>
                                     </div>
                                     <div className="p-2 bg-white/5 rounded-xl text-neutral-500 group-hover:text-white group-hover:bg-sky-500 transition-all">
-                                      <Download size={18} />
+                                      <ExternalLink size={18} />
                                     </div>
                                   </button>
                                 ))}
@@ -599,7 +574,7 @@ export default function App() {
                     {history.length === 0 ? (
                       <div className="py-20 flex flex-col items-center opacity-20">
                         <History size={48} />
-                        <p className="text-xs font-bold mt-4">Sin descargas</p>
+                        <p className="text-xs font-bold mt-4">Historial vacío</p>
                       </div>
                     ) : (
                       <div className="space-y-2">
@@ -611,7 +586,7 @@ export default function App() {
                               <p className="text-[9px] text-neutral-500 font-bold uppercase">{item.platform}</p>
                             </div>
                             <button onClick={() => window.open(item.url, '_system')} className="p-3 bg-sky-500/10 text-sky-400 rounded-xl">
-                              <Download size={16} />
+                              <ExternalLink size={16} />
                             </button>
                           </div>
                         ))}
@@ -634,89 +609,7 @@ export default function App() {
         </footer>
       </main>
 
-      {/* Fullscreen Player Overlay */}
-      <AnimatePresence>
-        {isFullscreen && selectedFormat && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center"
-          >
-            <div className="absolute top-6 left-6 z-[110]">
-              <button
-                onClick={() => { setIsFullscreen(false); stopPolling(); }}
-                className="bg-white/10 hover:bg-white/20 p-4 rounded-full text-white backdrop-blur-md transition-all active:scale-90"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className={`w-full h-full flex items-center justify-center p-4 relative`}>
-              {videoScale !== 'original' && previewProgress < 100 && (
-                <div className="absolute top-0 left-0 right-0 z-[120] pointer-events-none">
-                  <div className="h-1 bg-white/20 w-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${previewProgress}%` }}
-                      className="h-full bg-sky-500 shadow-[0_0_10px_#0ea5e9]"
-                    />
-                  </div>
-                  <div className="p-4 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent">
-                    <span className="text-[10px] font-black text-white uppercase tracking-[0.2em] animate-pulse">Exportando composición...</span>
-                    <span className="text-sm font-black text-white">{previewProgress}%</span>
-                  </div>
-                </div>
-              )}
-
-              {!selectedFormat.isMp3 && (selectedFormat.format.hasVideo || selectedFormat.format.mimeType.includes('video')) ? (
-                <div className="relative w-full h-full flex items-center justify-center">
-                  <video
-                    src={generatePreviewUrl()}
-                    controls
-                    autoPlay
-                    playsInline
-                    className="max-w-full max-h-[75vh] shadow-2xl rounded-xl z-10"
-                  />
-                </div>
-              ) : selectedFormat.isMp3 ? (
-                <div className="w-full max-w-sm p-8 glass-card rounded-[3rem] text-center space-y-6">
-                  <div className="w-24 h-24 mx-auto bg-sky-600 rounded-3xl flex items-center justify-center shadow-2xl">
-                    <Music size={40} className="text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-white font-black truncate">{info?.title}</h3>
-                    <p className="text-[10px] text-neutral-500 font-bold uppercase mt-1">Audio Extracted</p>
-                  </div>
-                  <audio
-                    src={`${API_BASE_URL}/api/download/audio.mp3?url=${encodeURIComponent(selectedFormat.format.url)}&ext=mp3&mp3=true&inline=true`}
-                    controls
-                    autoPlay
-                    className="w-full"
-                  />
-                </div>
-              ) : (
-                <img
-                  src={generatePreviewUrl()}
-                  className="max-w-full max-h-[80vh] object-contain rounded-2xl"
-                />
-              )}
-            </div>
-
-            <div className="absolute bottom-8 left-0 right-0 px-6 space-y-4">
-              <button
-                onClick={() => window.open(generatePreviewUrl().replace('inline=true', 'inline=false'), '_system')}
-                className="w-full py-5 bg-white text-black font-black rounded-3xl shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all text-sm uppercase tracking-tighter"
-              >
-                <Download size={20} /> GUARDAR EN DISPOSITIVO
-              </button>
-              <p className="text-white/30 text-[9px] font-black uppercase tracking-widest text-center">
-                ArgeLoad Media Suite • Servidor Seguro
-              </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Fullscreen Player Overlay eliminado para usar el navegador del sistema */}
     </div>
   );
 }
