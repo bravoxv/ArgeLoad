@@ -201,6 +201,26 @@ export default function App() {
     window.open(downloadUrl, '_system');
   };
 
+  const executeDirectDownload = () => {
+    if (!info || !selectedFormat) return;
+    const { format, isMp3 } = selectedFormat;
+
+    const safeTitle = info.title.replace(/[^a-zA-Z0-9]/g, "_") || 'video';
+    const targetExt = isMp3 ? 'mp3' : format.container || 'mp4';
+    const finalFilename = `${safeTitle}.${targetExt}`;
+
+    let downloadUrl = `${API_BASE_URL}/api/v2/download/${encodeURIComponent(finalFilename)}?url=${encodeURIComponent(format.url)}&ext=${targetExt}&title=${encodeURIComponent(info.title)}&inline=false`;
+
+    if (isMp3) {
+      downloadUrl += `&mp3=true`;
+    } else if (format.hasVideo && videoScale !== 'original') {
+      downloadUrl += `&scale=${videoScale}`;
+    }
+
+    addToHistory(info.title, downloadUrl, info.platform, info.thumbnail);
+    window.open(downloadUrl, '_system');
+  };
+
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-50 p-4 font-sans selection:bg-sky-500/30">
       <main className="max-w-md mx-auto py-8">
@@ -284,18 +304,33 @@ export default function App() {
                   </div>
                 )}
 
-                <button
-                  onClick={executeFinalDownload}
-                  disabled={loadingPreview}
-                  className={`w-full py-6 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black rounded-3xl transition-all shadow-2xl shadow-sky-600/30 active:scale-95 flex items-center justify-center gap-4 text-sm tracking-[0.1em] ${loadingPreview ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
-                >
-                  {loadingPreview ? (
-                    <Loader2 className="animate-spin" size={20} />
-                  ) : (
-                    <ExternalLink size={20} className={videoScale !== 'original' ? "animate-bounce" : ""} />
-                  )}
-                  {loadingPreview ? 'ESPERANDO PROCESAMIENTO...' : 'ABRIR EN EL NAVEGADOR'}
-                </button>
+                <div className="grid grid-cols-1 gap-3">
+                  <button
+                    onClick={executeFinalDownload}
+                    disabled={loadingPreview}
+                    className={`w-full py-5 bg-sky-600/10 hover:bg-sky-600/20 text-sky-400 font-black rounded-3xl transition-all border border-sky-500/20 active:scale-95 flex items-center justify-center gap-3 text-xs tracking-[0.1em] ${loadingPreview ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+                  >
+                    {loadingPreview ? (
+                      <Loader2 className="animate-spin" size={16} />
+                    ) : (
+                      <Monitor size={16} />
+                    )}
+                    {loadingPreview ? 'PROCESANDO...' : 'REPRODUCIR EN NAVEGADOR'}
+                  </button>
+
+                  <button
+                    onClick={executeDirectDownload}
+                    disabled={loadingPreview}
+                    className={`w-full py-6 bg-gradient-to-r from-emerald-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white font-black rounded-3xl transition-all shadow-2xl shadow-emerald-600/30 active:scale-95 flex items-center justify-center gap-4 text-sm tracking-[0.2em] ${loadingPreview ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+                  >
+                    {loadingPreview ? (
+                      <Loader2 className="animate-spin" size={20} />
+                    ) : (
+                      <Film size={20} className={videoScale !== 'original' ? "animate-bounce" : ""} />
+                    )}
+                    {loadingPreview ? 'ESPERANDO PROCESAMIENTO...' : 'DESCARGAR Y GUARDAR'}
+                  </button>
+                </div>
 
                 <p className="text-[9px] text-neutral-600 font-bold italic tracking-wide">
                   Tu archivo tendrá el nombre automático: <br />

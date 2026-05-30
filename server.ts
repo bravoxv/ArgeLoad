@@ -590,7 +590,13 @@ async function startServer() {
                 res.setHeader('Content-Type', 'video/mp4');
                 res.setHeader('Content-Length', stat.size);
                 res.setHeader('Accept-Ranges', 'bytes');
-                res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+                if (isInline) {
+                  res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+                } else {
+                  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+                }
+
                 fs.createReadStream(finalPath).pipe(res);
               }
             } catch (err) {
