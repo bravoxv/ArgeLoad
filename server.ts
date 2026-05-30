@@ -430,10 +430,9 @@ async function startServer() {
       let filename = `${safeTitle}.${targetExt}`;
 
       if (isInline) {
-        res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-      } else {
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       }
+      res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
 
       if (mp3 === 'true') {
@@ -479,14 +478,13 @@ async function startServer() {
           } else {
             command = command.toFormat('mp4')
               .videoCodec('libx264')
-              .audioCodec('aac') // Better compatibility than 'copy' when re-encoding
+              .audioCodec('aac')
               .outputOptions([
                 '-preset', 'ultrafast',
-                '-crf', '28',
+                '-crf', '24', // Improved quality
                 '-pix_fmt', 'yuv420p',
-                '-tune', 'zerolatency',
                 '-threads', '0',
-                '-movflags', '+faststart' // Standard for web playability
+                '-movflags', '+faststart'
               ]);
           }
 
@@ -549,23 +547,9 @@ async function startServer() {
           if (scale && !isImage && !isAudio) {
             const cacheKey = `${url}|${scale}`;
 
-            // If it's inline, we can stream it in real-time for an "instant" feel
-            if (isInline) {
-              res.setHeader('Content-Type', 'video/mp4');
-              res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-
-              command = command.outputOptions([
-                '-movflags', 'frag_keyframe+empty_moov+default_base_moof'
-              ]);
-
-              command.on('error', (err) => {
-                if (!res.headersSent) res.status(500).send("Stream error");
-              });
-
-              return command.pipe(res, { end: true });
-            }
-
-            // For non-inline (real downloads), use the file-based approach for stability
+            // For scaled videos, we ALWAYS process to a file first.
+            // This is the ONLY way to ensure standard MP4 headers (Content-Length, +faststart)
+            // that make the browser's "3 dots" menu and download work correctly.
             if (!activeTasks.has(cacheKey)) {
               const taskPromise = new Promise<string>((resolve, reject) => {
                 command.on('end', () => {
@@ -575,6 +559,7 @@ async function startServer() {
                   resolve(tempPath);
                 });
                 command.on('error', (err) => {
+                  console.error("Scale Error:", err);
                   activeTasks.delete(cacheKey);
                   reject(err);
                 });
@@ -590,6 +575,7 @@ async function startServer() {
                 res.setHeader('Content-Type', 'video/mp4');
                 res.setHeader('Content-Length', stat.size);
                 res.setHeader('Accept-Ranges', 'bytes');
+                res.setHeader('X-Content-Type-Options', 'nosniff');
 
                 if (isInline) {
                   res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
