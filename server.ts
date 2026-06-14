@@ -536,6 +536,12 @@ async function startServer() {
 
           let command = ffmpeg(nodeStream);
 
+          let movFlags = '+faststart';
+          if ((scale || resolution) && !isImage && !isAudio) {
+            // Usar MP4 fragmentado permite hacer streaming instantáneo sin esperar a procesar todo el video
+            movFlags = 'frag_keyframe+empty_moov';
+          }
+
           if (isImage) {
             command = command.toFormat('mjpeg').outputOptions(['-vframes', '1']);
           } else if (isAudio) {
@@ -545,11 +551,11 @@ async function startServer() {
               .videoCodec('libx264')
               .audioCodec('aac')
               .outputOptions([
-                '-preset', 'veryfast',
-                '-crf', '20', // Visually high quality (lower is better)
+                '-preset', 'ultrafast',
+                '-crf', '24', // Balance entre calidad y máxima velocidad
                 '-pix_fmt', 'yuv420p',
                 '-threads', '0',
-                '-movflags', '+faststart'
+                '-movflags', movFlags
               ]);
           }
 
@@ -614,64 +620,10 @@ async function startServer() {
             if (!res.headersSent) res.status(500).send("Processing error");
           });
 
-          if ((scale || resolution) && !isImage && !isAudio) {
-            const cacheKey = `${url}|${scale || 'orig'}|${resolution || 'orig'}`;
-
-            // For scaled videos, we ALWAYS process to a file first.
-            // This is the ONLY way to ensure standard MP4 headers (Content-Length, +faststart)
-            // that make the browser's "3 dots" menu and download work correctly.
-            if (!activeTasks.has(cacheKey)) {
-              const taskPromise = new Promise<string>((resolve, reject) => {
-                command.on('end', () => {
-                  if (tid) progressMap.set(tid, 100);
-                  scaleCache.set(cacheKey, tempPath);
-                  activeTasks.delete(cacheKey);
-                  resolve(tempPath);
-                });
-                command.on('error', (err) => {
-                  console.error("Scale Error:", err);
-                  activeTasks.delete(cacheKey);
-                  reject(err);
-                });
-                command.save(tempPath);
-              });
-              activeTasks.set(cacheKey, taskPromise);
-            }
-
-            try {
-              const finalPath = await activeTasks.get(cacheKey)!;
-              if (!res.headersSent) {
-                const stat = fs.statSync(finalPath);
-                res.setHeader('Content-Type', 'video/mp4');
-                res.setHeader('Content-Length', stat.size);
-                res.setHeader('Accept-Ranges', 'bytes');
-                res.setHeader('X-Content-Type-Options', 'nosniff');
-
-                if (isInline) {
-                  res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-                } else {
-                  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-                }
-
-                fs.createReadStream(finalPath).pipe(res);
-              }
-            } catch (err) {
-              if (!res.headersSent) res.status(500).send("Processing error");
-            }
-          } else if (isInline) {
-            // Non-scale inline: real-time stream
-            command.on('end', () => { if (tid) progressMap.delete(tid); });
-            command.pipe(res, { end: true });
-          } else {
-            // Traditional download
-            command.on('end', () => {
-              if (tid) progressMap.delete(tid);
-              res.download(tempPath, filename, () => {
-                if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-              });
-            });
-            command.save(tempPath);
-          }
+          // Enviar inmediatamente para que el reproductor empiece o la descarga inicie al instante
+          command.on('end', () => { if (tid) progressMap.delete(tid); });
+          res.setHeader('Connection', 'keep-alive');
+          command.pipe(res, { end: true });
           return;
         }
 
