@@ -62,6 +62,7 @@ export default function App() {
   const [tab, setTab] = useState<'web' | 'history'>('web');
   const [history, setHistory] = useState<DownloadItem[]>([]);
   const [videoScale, setVideoScale] = useState<'original' | '16_9' | '9_16'>('original');
+  const [videoQuality, setVideoQuality] = useState<'orig' | '480' | '720' | '1080'>('orig');
 
   const [view, setView] = useState<'home' | 'download'>('home');
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -111,13 +112,19 @@ export default function App() {
     setLoading(true);
     setError(null);
     setInfo(null);
-    setProgress(10);
-    setStatus("Inicializando motor...");
+    setProgress(15);
+    setStatus("Analizando enlace...");
+
+    const statusInterval = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 90) return prev;
+        if (prev >= 70) return prev + 1;
+        if (prev >= 40) return prev + 2;
+        return prev + 5;
+      });
+    }, 400);
 
     try {
-      setTimeout(() => { setStatus("Contactando plataforma..."); setProgress(40); }, 800);
-      setTimeout(() => { setStatus("Extrayendo medios..."); setProgress(70); }, 1500);
-
       const response = await fetch(`${API_BASE_URL}/api/info`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -127,10 +134,12 @@ export default function App() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Error al analizar");
 
+      clearInterval(statusInterval);
       setInfo(data);
       setProgress(100);
       setStatus("¡Análisis completado!");
     } catch (err: any) {
+      clearInterval(statusInterval);
       setError(err.message || "Error de conexión");
       setStatus("Error en el análisis");
     } finally {
@@ -164,6 +173,7 @@ export default function App() {
   const handleDownloadClick = (format: Format, isMp3: boolean) => {
     setSelectedFormat({ format, isMp3 });
     setVideoScale('original');
+    setVideoQuality('orig');
     setView('download');
   };
 
@@ -190,10 +200,12 @@ export default function App() {
 
     if (isMp3) {
       downloadUrl += `&mp3=true`;
-    } else if (format.hasVideo && videoScale !== 'original') {
+    } else if (format.hasVideo && (videoScale !== 'original' || videoQuality !== 'orig')) {
       const taskId = `task_${Date.now()}`;
       setCurrentTaskId(taskId);
-      downloadUrl += `&scale=${videoScale}&taskId=${taskId}`;
+      if (videoScale !== 'original') downloadUrl += `&scale=${videoScale}`;
+      if (videoQuality !== 'orig') downloadUrl += `&res=${videoQuality}`;
+      downloadUrl += `&taskId=${taskId}`;
     }
 
     addToHistory(info.title, downloadUrl, info.platform, info.thumbnail);
@@ -213,8 +225,9 @@ export default function App() {
 
     if (isMp3) {
       downloadUrl += `&mp3=true`;
-    } else if (format.hasVideo && videoScale !== 'original') {
-      downloadUrl += `&scale=${videoScale}`;
+    } else if (format.hasVideo && (videoScale !== 'original' || videoQuality !== 'orig')) {
+      if (videoScale !== 'original') downloadUrl += `&scale=${videoScale}`;
+      if (videoQuality !== 'orig') downloadUrl += `&res=${videoQuality}`;
     }
 
     addToHistory(info.title, downloadUrl, info.platform, info.thumbnail);
@@ -284,7 +297,7 @@ export default function App() {
                 {/* Aspect Ratio Options for Videos */}
                 {!selectedFormat.isMp3 && (selectedFormat.format.hasVideo || selectedFormat.format.mimeType.includes('video')) && (
                   <div className="space-y-4 pt-4 border-t border-white/5">
-                    <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest text-left px-2">Ajustar Relación de Aspecto (Solo Video)</p>
+                    <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest text-left px-2">Ajustar Relación de Aspecto</p>
                     <div className="grid grid-cols-3 gap-2">
                       {[
                         { id: 'original', label: 'Original', icon: <Film size={14} /> },
@@ -297,6 +310,24 @@ export default function App() {
                           className={`py-3 px-1 rounded-2xl transition-all flex flex-col items-center gap-1 border ${videoScale === opt.id ? 'bg-sky-600 border-sky-400 text-white shadow-lg' : 'bg-white/5 border-white/5 text-neutral-500 hover:bg-white/10'}`}
                         >
                           {opt.icon}
+                          <span className="text-[8px] font-black uppercase tracking-tighter">{opt.label}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest text-left px-2 pt-2">Calidad de Video</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        { id: 'orig', label: 'Original' },
+                        { id: '480', label: '480p' },
+                        { id: '720', label: '720p' },
+                        { id: '1080', label: '1080p' }
+                      ].map(opt => (
+                        <button
+                          key={opt.id}
+                          onClick={() => setVideoQuality(opt.id as any)}
+                          className={`py-3 px-1 rounded-2xl transition-all flex flex-col items-center justify-center border ${videoQuality === opt.id ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg' : 'bg-white/5 border-white/5 text-neutral-500 hover:bg-white/10'}`}
+                        >
                           <span className="text-[8px] font-black uppercase tracking-tighter">{opt.label}</span>
                         </button>
                       ))}

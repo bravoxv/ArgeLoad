@@ -44,16 +44,76 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
 
-  // Helper for parallel racing of scrapers
+  // Helper for parallel racing of scrapers - TRUE RACE for speed
   const raceScrapers = async (tasks: Promise<any>[]) => {
-    const results = await Promise.allSettled(tasks);
-    // Return the first successful result that has formats
-    for (const res of results) {
-      if (res.status === 'fulfilled' && res.value && res.value.formats?.length > 0) {
-        return res.value;
+    if (tasks.length === 0) return null;
+    return new Promise((resolve) => {
+      let settledCount = 0;
+      let resolved = false;
+
+      tasks.forEach(task => {
+        task.then(res => {
+          if (!resolved && res && res.formats?.length > 0) {
+            resolved = true;
+            resolve(res);
+          } else {
+            settledCount++;
+            if (settledCount === tasks.length && !resolved) resolve(null);
+          }
+        }).catch(() => {
+          settledCount++;
+          if (settledCount === tasks.length && !resolved) resolve(null);
+        });
+      });
+
+      // Safety timeout for the race (15s)
+      setTimeout(() => { if (!resolved) resolve(null); }, 15000);
+    });
+  };
+
+  const cobaltScraper = async (cleanUrl: string) => {
+    try {
+      const cobaltRes = await fetch('https://api.cobalt.tools/api/json', {
+        method: 'POST',
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+        body: JSON.stringify({ url: cleanUrl })
+      });
+      const cobaltData: any = await cobaltRes.json();
+      if (cobaltData && (cobaltData.url || cobaltData.picker)) {
+        const formats = [];
+        if (cobaltData.url) {
+          const isVideo = cobaltData.url.includes('.mp4') || cobaltData.url.includes('video') || !cobaltData.url.includes('.jpg');
+          const fixedUrl = fixMediaUrl(cobaltData.url, cobaltData.url.includes('instagram') ? 'instagram' : (cobaltData.url.includes('twimg') ? 'twitter' : 'generic'), isVideo);
+          formats.push({ itag: 2000, mimeType: isVideo ? 'video/mp4' : 'image/jpeg', qualityLabel: 'Original', hasVideo: isVideo, hasAudio: true, container: isVideo ? 'mp4' : 'jpg', url: fixedUrl });
+        } else if (cobaltData.picker) {
+          cobaltData.picker.forEach((p: any, i: number) => {
+            const isVideo = p.type === 'video';
+            const fixedUrl = fixMediaUrl(p.url, p.url.includes('instagram') ? 'instagram' : (p.url.includes('twimg') ? 'twitter' : 'generic'), isVideo);
+            formats.push({ itag: 2001 + i, mimeType: isVideo ? 'video/mp4' : 'image/jpeg', qualityLabel: `Item ${i + 1}`, hasVideo: isVideo, hasAudio: true, container: isVideo ? 'mp4' : 'jpg', url: fixedUrl });
+          });
+        }
+        return {
+          title: "Contenido Detectado",
+          author: "Automático (Cobalt)",
+          thumbnail: cobaltData.url || (cobaltData.picker ? cobaltData.picker[0].url : ""),
+          platform: 'cobalt',
+          formats
+        };
       }
-    }
+    } catch (e) { }
     return null;
+  };
+
+  // Helper to fix media URLs as requested by the user
+  const fixMediaUrl = (url: string, platform: string, isVideo: boolean) => {
+    if (!url) return url;
+    if (platform === 'instagram' && isVideo && url.includes('cdninstagram.com')) {
+      return url.replace(/[a-z0-9-]+\.cdninstagram\.com/i, 'scontent-sea5-1.cdninstagram.com');
+    }
+    if ((platform === 'twitter' || platform === 'x' || platform === 'direct') && isVideo && url.includes('twimg.com')) {
+      return url.replace(/[a-z0-9-]+\.twimg\.com/i, 'video.twimg.com');
+    }
+    return url;
   };
 
   // API Route to fetch video info
@@ -74,16 +134,22 @@ async function startServer() {
 
       // 1. YouTube
       if (domain.includes('youtube.com') || domain.includes('youtu.be')) {
-        try {
-          const yt: any = await btch.youtube(cleanUrl);
-          if (yt && (yt.mp4 || yt.mp3)) {
-            const formats = [];
-            if (yt.mp4) formats.push({ itag: 137, mimeType: 'video/mp4', qualityLabel: 'Video HD', hasVideo: true, hasAudio: true, container: 'mp4', url: yt.mp4 });
-            if (yt.mp3) formats.push({ itag: 140, mimeType: 'audio/mpeg', qualityLabel: 'Audio MP3', hasVideo: false, hasAudio: true, container: 'mp3', url: yt.mp3 });
-
-            return res.json({ title: yt.title || "YouTube Video", author: yt.author || "YouTube", thumbnail: yt.thumbnail || "", duration: yt.duration, platform: 'youtube', formats });
-          }
-        } catch (e) { }
+        const result = await raceScrapers([
+          (async () => {
+            try {
+              const yt: any = await btch.youtube(cleanUrl);
+              if (yt && (yt.mp4 || yt.mp3)) {
+                const formats = [];
+                if (yt.mp4) formats.push({ itag: 137, mimeType: 'video/mp4', qualityLabel: 'Video HD', hasVideo: true, hasAudio: true, container: 'mp4', url: yt.mp4 });
+                if (yt.mp3) formats.push({ itag: 140, mimeType: 'audio/mpeg', qualityLabel: 'Audio MP3', hasVideo: false, hasAudio: true, container: 'mp3', url: yt.mp3 });
+                return { title: yt.title || "YouTube Video", author: yt.author || "YouTube", thumbnail: yt.thumbnail || "", duration: yt.duration, platform: 'youtube', formats };
+              }
+            } catch (e) { }
+            return null;
+          })(),
+          cobaltScraper(cleanUrl)
+        ]);
+        if (result) return res.json(result);
       }
 
       // 2. TikTok
@@ -108,7 +174,8 @@ async function startServer() {
               return { itag: 300 + i, mimeType: isImg ? 'image/jpeg' : 'video/mp4', qualityLabel: isImg ? `Imagen ${i + 1}` : 'Video', hasVideo: !isImg, hasAudio: !isImg, container: isImg ? 'jpg' : 'mp4', url: v };
             });
             return { title: "TikTok Content", author: "TikTok User", thumbnail: formats[0]?.url, duration: (tt as any).duration, platform: 'tiktok', formats };
-          })()
+          })(),
+          cobaltScraper(cleanUrl)
         ]);
         if (result) return res.json(result);
       }
@@ -121,7 +188,6 @@ async function startServer() {
             if (!ig?.data) return null;
             const formats = ig.data.map((item: any, i: number) => {
               const url = item.url;
-              // Improved video detection
               const isVideo = url.includes('.mp4') || url.toLowerCase().includes('video') || !url.match(/\.(jpg|jpeg|png|webp|heic)/i);
               return {
                 itag: 400 + i,
@@ -130,17 +196,11 @@ async function startServer() {
                 hasVideo: isVideo,
                 hasAudio: isVideo,
                 container: isVideo ? 'mp4' : 'jpg',
-                url: url,
-                proxyUrl: `/api/proxy-image?url=${encodeURIComponent(url)}`
+                url: fixMediaUrl(url, 'instagram', isVideo),
+                proxyUrl: `/api/proxy-image?url=${encodeURIComponent(fixMediaUrl(url, 'instagram', isVideo))}`
               };
             });
-            return {
-              title: "Instagram Post",
-              author: "Instagram User",
-              thumbnail: formats[0]?.proxyUrl || formats[0]?.url,
-              platform: 'instagram',
-              formats
-            };
+            return { title: "Instagram Post", author: "Instagram User", thumbnail: formats[0]?.proxyUrl || formats[0]?.url, platform: 'instagram', formats };
           })(),
           (async () => {
             const ig = await btch.igdl(cleanUrl);
@@ -155,38 +215,40 @@ async function startServer() {
                 hasVideo: isVideo,
                 hasAudio: isVideo,
                 container: isVideo ? 'mp4' : 'jpg',
-                url: url,
-                proxyUrl: `/api/proxy-image?url=${encodeURIComponent(url)}`
+                url: fixMediaUrl(url, 'instagram', isVideo),
+                proxyUrl: `/api/proxy-image?url=${encodeURIComponent(fixMediaUrl(url, 'instagram', isVideo))}`
               };
             });
-            return {
-              title: "Instagram Post",
-              author: "Instagram User",
-              thumbnail: formats[0]?.proxyUrl || formats[0]?.url,
-              platform: 'instagram',
-              formats
-            };
-          })()
+            return { title: "Instagram Post", author: "Instagram User", thumbnail: formats[0]?.proxyUrl || formats[0]?.url, platform: 'instagram', formats };
+          })(),
+          cobaltScraper(cleanUrl)
         ]);
         if (result) return res.json(result);
       }
 
       // 4. Twitter / X
       if (domain.includes('twitter.com') || domain.includes('x.com')) {
-        try {
-          const vxUrl = cleanUrl.replace(/twitter\.com|x\.com/, 'api.vxtwitter.com');
-          const vxRes = await fetch(vxUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-          const data: any = await vxRes.json();
-          if (data.media_extended) {
-            const formats = data.media_extended.map((m: any, i: number) => ({
-              itag: 600 + i, mimeType: m.type === 'video' || m.type === 'gif' ? 'video/mp4' : 'image/jpeg',
-              qualityLabel: m.type === 'video' || m.type === 'gif' ? `Video ${i + 1}` : `Imagen ${i + 1}`,
-              hasVideo: m.type === 'video' || m.type === 'gif', hasAudio: m.type === 'video', container: m.type === 'video' || m.type === 'gif' ? 'mp4' : 'jpg', url: m.url,
-              proxyUrl: m.type === 'video' || m.type === 'gif' ? `/api/download?url=${encodeURIComponent(m.url)}&inline=true` : `/api/proxy-image?url=${encodeURIComponent(m.url)}`
-            }));
-            return res.json({ title: data.text || "Twitter/X Post", author: `${data.user_name} (@${data.user_screen_name})`, thumbnail: data.media_extended[0]?.thumbnail_url || data.media_extended[0]?.url, platform: 'twitter', formats });
-          }
-        } catch (e) { }
+        const result = await raceScrapers([
+          (async () => {
+            try {
+              const vxUrl = cleanUrl.replace(/twitter\.com|x\.com/, 'api.vxtwitter.com');
+              const vxRes = await fetch(vxUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+              const data: any = await vxRes.json();
+              if (data.media_extended) {
+                const formats = data.media_extended.map((m: any, i: number) => ({
+                  itag: 600 + i, mimeType: m.type === 'video' || m.type === 'gif' ? 'video/mp4' : 'image/jpeg',
+                  qualityLabel: m.type === 'video' || m.type === 'gif' ? `Video ${i + 1}` : `Imagen ${i + 1}`,
+                  hasVideo: m.type === 'video' || m.type === 'gif', hasAudio: m.type === 'video', container: m.type === 'video' || m.type === 'gif' ? 'mp4' : 'jpg', url: fixMediaUrl(m.url, 'twitter', m.type === 'video' || m.type === 'gif'),
+                  proxyUrl: m.type === 'video' || m.type === 'gif' ? `/api/download?url=${encodeURIComponent(fixMediaUrl(m.url, 'twitter', true))}&inline=true` : `/api/proxy-image?url=${encodeURIComponent(m.url)}`
+                }));
+                return { title: data.text || "Twitter/X Post", author: `${data.user_name} (@${data.user_screen_name})`, thumbnail: data.media_extended[0]?.thumbnail_url || data.media_extended[0]?.url, platform: 'twitter', formats };
+              }
+            } catch (e) { }
+            return null;
+          })(),
+          cobaltScraper(cleanUrl)
+        ]);
+        if (result) return res.json(result);
       }
 
       // 5. Facebook
@@ -292,10 +354,13 @@ async function startServer() {
           const formats = [];
           if (cobaltData.url) {
             const isVideo = cobaltData.url.includes('.mp4') || cobaltData.url.includes('video') || !cobaltData.url.includes('.jpg');
-            formats.push({ itag: 2000, mimeType: isVideo ? 'video/mp4' : 'image/jpeg', qualityLabel: 'Original', hasVideo: isVideo, hasAudio: true, container: isVideo ? 'mp4' : 'jpg', url: cobaltData.url });
+            const fixedUrl = fixMediaUrl(cobaltData.url, cobaltData.url.includes('instagram') ? 'instagram' : (cobaltData.url.includes('twimg') ? 'twitter' : 'generic'), isVideo);
+            formats.push({ itag: 2000, mimeType: isVideo ? 'video/mp4' : 'image/jpeg', qualityLabel: 'Original', hasVideo: isVideo, hasAudio: true, container: isVideo ? 'mp4' : 'jpg', url: fixedUrl });
           } else if (cobaltData.picker) {
             cobaltData.picker.forEach((p: any, i: number) => {
-              formats.push({ itag: 2001 + i, mimeType: p.type === 'video' ? 'video/mp4' : 'image/jpeg', qualityLabel: `Item ${i + 1}`, hasVideo: p.type === 'video', hasAudio: true, container: p.type === 'video' ? 'mp4' : 'jpg', url: p.url });
+              const isVideo = p.type === 'video';
+              const fixedUrl = fixMediaUrl(p.url, p.url.includes('instagram') ? 'instagram' : (p.url.includes('twimg') ? 'twitter' : 'generic'), isVideo);
+              formats.push({ itag: 2001 + i, mimeType: isVideo ? 'video/mp4' : 'image/jpeg', qualityLabel: `Item ${i + 1}`, hasVideo: isVideo, hasAudio: true, container: isVideo ? 'mp4' : 'jpg', url: fixedUrl });
             });
           }
           return res.json({
@@ -371,14 +436,14 @@ async function startServer() {
   // Proxy Download
   app.get(["/api/download", "/api/download/:forcedFilename", "/api/v2/download/:forcedFilename"], async (req, res) => {
     try {
-      const { url, ext, title, mp3, start, end, scale, taskId } = req.query;
+      const { url, ext, title, mp3, start, end, scale, res: resolution, taskId } = req.query;
       if (!url || typeof url !== 'string') return res.status(400).send("Missing URL");
 
       const tid = typeof taskId === 'string' ? taskId : null;
 
-      // --- CACHE HIT: Serve scaled video directly if already processed ---
-      if (scale && typeof url === 'string') {
-        const cacheKey = `${url}|${scale}`;
+      // --- CACHE HIT: Serve processed video directly if already processed ---
+      if ((scale || resolution) && typeof url === 'string') {
+        const cacheKey = `${url}|${scale || 'orig'}|${resolution || 'orig'}`;
         const cachedPath = scaleCache.get(cacheKey);
         if (cachedPath && fs.existsSync(cachedPath)) {
           console.log(`[CACHE HIT] Serving ${scale} for cached video`);
@@ -413,7 +478,7 @@ async function startServer() {
       if (url.includes('twitter.com') || url.includes('x.com') || url.includes('twimg.com')) {
         fetchHeaders['Referer'] = 'https://x.com/';
         fetchHeaders['Origin'] = 'https://x.com/';
-      } else if (url.includes('instagram.com')) {
+      } else if (url.includes('instagram.com') || url.includes('cdninstagram.com')) {
         fetchHeaders['Referer'] = 'https://instagram.com/';
       }
 
@@ -463,7 +528,7 @@ async function startServer() {
         else if (isImage) res.setHeader('Content-Type', 'image/jpeg');
         else res.setHeader('Content-Type', 'video/mp4');
 
-        if (start || end || scale) {
+        if (start || end || scale || resolution) {
           if (!fetchRes.body) return res.status(500).send("No source body");
           const nodeStream = Readable.fromWeb(fetchRes.body as any);
           const tempFilename = `proc_${Date.now()}_${Math.random().toString(36).substring(7)}.${isImage ? 'jpg' : (isAudio ? 'mp3' : 'mp4')}`;
@@ -501,6 +566,11 @@ async function startServer() {
               "setsar=1",
               "scale=trunc(iw/2)*2:trunc(ih/2)*2"
             ]);
+          } else if (resolution && !isImage && !isAudio) {
+            const h = parseInt(resolution as string);
+            if ([480, 720, 1080].includes(h)) {
+              command = command.videoFilters(`scale=-2:${h}`);
+            }
           }
 
           if (start && !isImage) command = command.setStartTime(String(start));
@@ -544,8 +614,8 @@ async function startServer() {
             if (!res.headersSent) res.status(500).send("Processing error");
           });
 
-          if (scale && !isImage && !isAudio) {
-            const cacheKey = `${url}|${scale}`;
+          if ((scale || resolution) && !isImage && !isAudio) {
+            const cacheKey = `${url}|${scale || 'orig'}|${resolution || 'orig'}`;
 
             // For scaled videos, we ALWAYS process to a file first.
             // This is the ONLY way to ensure standard MP4 headers (Content-Length, +faststart)
@@ -624,7 +694,7 @@ async function startServer() {
       if (!url || typeof url !== 'string') return res.status(400).send("Missing URL");
 
       const fetchHeaders: any = { 'User-Agent': 'Mozilla/5.0' };
-      if (url.includes('instagram.com') || url.includes('fbcdn.net')) {
+      if (url.includes('instagram.com') || url.includes('cdninstagram.com') || url.includes('fbcdn.net')) {
         fetchHeaders['Referer'] = 'https://instagram.com/';
       } else if (url.includes('twitter.com') || url.includes('x.com') || url.includes('twimg.com')) {
         fetchHeaders['Referer'] = 'https://x.com/';
