@@ -71,12 +71,12 @@ async function startServer() {
     });
   };
 
-  const cobaltScraper = async (cleanUrl: string) => {
+  const cobaltScraper = async (cleanUrl: string, vQuality = "720") => {
     try {
       const cobaltRes = await fetch('https://api.cobalt.tools/api/json', {
         method: 'POST',
         headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' },
-        body: JSON.stringify({ url: cleanUrl })
+        body: JSON.stringify({ url: cleanUrl, vQuality })
       });
       const cobaltData: any = await cobaltRes.json();
       if (cobaltData && (cobaltData.url || cobaltData.picker)) {
