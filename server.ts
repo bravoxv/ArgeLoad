@@ -71,7 +71,7 @@ async function startServer() {
     });
   };
 
-  const cobaltScraper = async (cleanUrl: string, vQuality = "720") => {
+  const cobaltScraper = async (cleanUrl: string, vQuality = "1080") => {
     try {
       const cobaltRes = await fetch('https://api.cobalt.tools/api/json', {
         method: 'POST',

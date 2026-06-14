@@ -62,7 +62,6 @@ export default function App() {
   const [tab, setTab] = useState<'web' | 'history'>('web');
   const [history, setHistory] = useState<DownloadItem[]>([]);
   const [videoScale, setVideoScale] = useState<'original' | '16_9' | '9_16'>('original');
-  const [videoQuality, setVideoQuality] = useState<'orig' | '480' | '720' | '1080'>('orig');
 
   const [view, setView] = useState<'home' | 'download'>('home');
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -173,7 +172,6 @@ export default function App() {
   const handleDownloadClick = (format: Format, isMp3: boolean) => {
     setSelectedFormat({ format, isMp3 });
     setVideoScale('original');
-    setVideoQuality('orig');
     setView('download');
   };
 
@@ -181,15 +179,14 @@ export default function App() {
     if (!selectedFormat || !info) return "";
     const { format } = selectedFormat;
 
-    // Si no hay escala ni calidad elegida, usamos el original
-    if (videoScale === 'original' && videoQuality === 'orig') {
+    // Si no hay escala elegida, usamos el original
+    if (videoScale === 'original') {
       return resolveMediaUrl(format.proxyUrl || format.url);
     }
 
     const safeTitle = (info.title).replace(/[^a-zA-Z0-9]/g, "_");
     let url = `${API_BASE_URL}/api/v2/download/${safeTitle}.mp4?url=${encodeURIComponent(format.url)}&ext=mp4&inline=true`;
     if (videoScale !== 'original') url += `&scale=${videoScale}`;
-    if (videoQuality !== 'orig') url += `&res=${videoQuality}`;
     if (currentTaskId) url += `&taskId=${currentTaskId}`;
     return url;
   };
@@ -206,12 +203,10 @@ export default function App() {
 
     if (isMp3) {
       downloadUrl += `&mp3=true`;
-    } else if (format.hasVideo && (videoScale !== 'original' || videoQuality !== 'orig')) {
+    } else if (format.hasVideo && videoScale !== 'original') {
       const taskId = `task_${Date.now()}`;
       setCurrentTaskId(taskId);
-      if (videoScale !== 'original') downloadUrl += `&scale=${videoScale}`;
-      if (videoQuality !== 'orig') downloadUrl += `&res=${videoQuality}`;
-      downloadUrl += `&taskId=${taskId}`;
+      downloadUrl += `&scale=${videoScale}&taskId=${taskId}`;
     }
 
     addToHistory(info.title, downloadUrl, info.platform, info.thumbnail);
@@ -231,9 +226,8 @@ export default function App() {
 
     if (isMp3) {
       downloadUrl += `&mp3=true`;
-    } else if (format.hasVideo && (videoScale !== 'original' || videoQuality !== 'orig')) {
-      if (videoScale !== 'original') downloadUrl += `&scale=${videoScale}`;
-      if (videoQuality !== 'orig') downloadUrl += `&res=${videoQuality}`;
+    } else if (format.hasVideo && videoScale !== 'original') {
+      downloadUrl += `&scale=${videoScale}`;
     }
 
     addToHistory(info.title, downloadUrl, info.platform, info.thumbnail);
@@ -304,7 +298,7 @@ export default function App() {
                 {/* Aspect Ratio Options for Videos */}
                 {!selectedFormat.isMp3 && (selectedFormat.format.hasVideo || selectedFormat.format.mimeType.includes('video')) && (
                   <div className="space-y-4 pt-4 border-t border-white/5">
-                    <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest text-left px-2">Ajustar Relación de Aspecto</p>
+                    <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest text-left px-2">Ajustar Relación de Aspecto (Solo Video)</p>
                     <div className="grid grid-cols-3 gap-2">
                       {[
                         { id: 'original', label: 'Original', icon: <Film size={14} /> },
@@ -317,24 +311,6 @@ export default function App() {
                           className={`py-3 px-1 rounded-2xl transition-all flex flex-col items-center gap-1 border ${videoScale === opt.id ? 'bg-sky-600 border-sky-400 text-white shadow-lg' : 'bg-white/5 border-white/5 text-neutral-500 hover:bg-white/10'}`}
                         >
                           {opt.icon}
-                          <span className="text-[8px] font-black uppercase tracking-tighter">{opt.label}</span>
-                        </button>
-                      ))}
-                    </div>
-
-                    <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest text-left px-2 pt-2">Calidad de Video</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {[
-                        { id: 'orig', label: 'Original' },
-                        { id: '480', label: '480p' },
-                        { id: '720', label: '720p' },
-                        { id: '1080', label: '1080p' }
-                      ].map(opt => (
-                        <button
-                          key={opt.id}
-                          onClick={() => setVideoQuality(opt.id as any)}
-                          className={`py-3 px-1 rounded-2xl transition-all flex flex-col items-center justify-center border ${videoQuality === opt.id ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg' : 'bg-white/5 border-white/5 text-neutral-500 hover:bg-white/10'}`}
-                        >
                           <span className="text-[8px] font-black uppercase tracking-tighter">{opt.label}</span>
                         </button>
                       ))}
