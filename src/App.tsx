@@ -180,10 +180,16 @@ export default function App() {
   const generatePreviewUrl = () => {
     if (!selectedFormat || !info) return "";
     const { format } = selectedFormat;
-    if (videoScale === 'original') return resolveMediaUrl(format.proxyUrl || format.url);
+
+    // Si no hay escala ni calidad elegida, usamos el original
+    if (videoScale === 'original' && videoQuality === 'orig') {
+      return resolveMediaUrl(format.proxyUrl || format.url);
+    }
 
     const safeTitle = (info.title).replace(/[^a-zA-Z0-9]/g, "_");
-    let url = `${API_BASE_URL}/api/v2/download/${safeTitle}.mp4?url=${encodeURIComponent(format.url)}&ext=mp4&scale=${videoScale}&inline=true`;
+    let url = `${API_BASE_URL}/api/v2/download/${safeTitle}.mp4?url=${encodeURIComponent(format.url)}&ext=mp4&inline=true`;
+    if (videoScale !== 'original') url += `&scale=${videoScale}`;
+    if (videoQuality !== 'orig') url += `&res=${videoQuality}`;
     if (currentTaskId) url += `&taskId=${currentTaskId}`;
     return url;
   };
@@ -259,7 +265,8 @@ export default function App() {
 
                   {!selectedFormat.isMp3 && (selectedFormat.format.hasVideo || selectedFormat.format.mimeType.includes('video')) ? (
                     <video
-                      src={resolveMediaUrl(selectedFormat.format.proxyUrl || selectedFormat.format.url)}
+                      key={generatePreviewUrl()}
+                      src={generatePreviewUrl()}
                       controls
                       autoPlay
                       muted

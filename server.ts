@@ -545,8 +545,8 @@ async function startServer() {
               .videoCodec('libx264')
               .audioCodec('aac')
               .outputOptions([
-                '-preset', 'ultrafast',
-                '-crf', '24', // Improved quality
+                '-preset', 'veryfast',
+                '-crf', '20', // Visually high quality (lower is better)
                 '-pix_fmt', 'yuv420p',
                 '-threads', '0',
                 '-movflags', '+faststart'
